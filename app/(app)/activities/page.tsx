@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import type { Prisma } from "../../../generated/prisma/client";
+import type { Prisma } from "@/generated/prisma/client";
 import { getDb } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth/session";
 import ActivityRow from "@/components/ActivityRow";

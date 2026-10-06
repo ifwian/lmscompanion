@@ -29,4 +29,12 @@ session*.json
 # diagnostic output
 diagnose-output.txt
 
+# Neon auth and agents
+.neon
+.agents/
+skills-lock.json
+
+# temporary smtp auth file
+smtp-auth.tmp.mjs
+
 email-preview-*.html

@@ -1,6 +1,6 @@
 // The emails. Plain, readable and professional: black and white, built from tables with inline styles because
 // that is what Gmail and Outlook render reliably. Everything that came from e-GURO is escaped before it goes into HTML.
-import type { ActivityType } from "../../generated/prisma/client";
+import type { ActivityType } from "@/generated/prisma/client";
 
 const TYPE_LABEL: Record<ActivityType, string> = {
   ACTIVITY: "Activity",

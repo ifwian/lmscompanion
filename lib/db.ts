@@ -1,7 +1,7 @@
 // Single Prisma client for the whole app.
 // Prisma 7 needs a "driver adapter"; we use the standard Postgres one (pg).
 // The global variable stops dev-mode hot reload from opening a new connection every save.
-import { PrismaClient } from "../generated/prisma/client";
+import { PrismaClient } from '@/generated/prisma/client'
 import { PrismaPg } from "@prisma/adapter-pg";
 
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
