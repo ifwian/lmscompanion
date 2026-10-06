@@ -3,7 +3,7 @@
 import { getDb } from "@/lib/db";
 import { config } from "@/lib/config";
 import { decryptSecret } from "@/lib/crypto";
-import { connect, getActivities, getAnnouncements, LmsAuthError } from "@/services/lms";
+import { connect, getActivities, getAnnouncements, getCourses, LmsAuthError } from "@/services/lms";
 import { detectAndSave } from "@/services/notifications/detect";
 import { sendPendingEmails } from "@/services/email/send";
 
@@ -11,7 +11,7 @@ const STALE_CHECKING_MS = 10 * 60 * 1000; // a CHECKING state older than this is
 const MAX_BACKOFF_MS = 6 * 60 * 60 * 1000;
 
 export type SyncOutcome =
-  | { ok: true; totalSeen: number; newCount: number; baseline: boolean; emailsSent: number }
+  | { ok: true; totalSeen: number; newCount: number; baseline: boolean; emailsSent: number; pendingCount: number; unreadCount: number }
   | { ok: false; code: string; skipped?: boolean };
 
 export async function syncUserLms(userId: string): Promise<SyncOutcome> {
@@ -36,11 +36,24 @@ export async function syncUserLms(userId: string): Promise<SyncOutcome> {
   try {
     const password = decryptSecret(connection.encryptedPassword);
     const session = await connect({ username: connection.lmsUsername, password });
-    // Announcements are a separate source; empty until a verified endpoint exists.
+    // Order matters: the real site loads the filter page (which lists the classes) before its table asks for rows.
+    const courses = await getCourses(session);
+    const courseIdByLmsId = new Map<string, string>();
+    for (const course of courses) {
+      const saved = await db.course.upsert({
+        where: { userId_lmsCourseId: { userId, lmsCourseId: course.lmsCourseId } },
+        update: { courseCode: course.courseCode, courseName: course.courseName },
+        create: { userId, lmsCourseId: course.lmsCourseId, courseCode: course.courseCode, courseName: course.courseName },
+        select: { id: true },
+      });
+      courseIdByLmsId.set(course.lmsCourseId, saved.id);
+    }
+
+    // Announcements are a separate source; empty until a verified address exists.
     const items = [...(await getActivities(session)), ...(await getAnnouncements(session))];
 
     const baseline = !connection.baselineDone;
-    const detected = await detectAndSave(userId, items, baseline);
+    const detected = await detectAndSave(userId, items, baseline, courseIdByLmsId);
     const emails = await sendPendingEmails(userId);
 
     await db.lmsConnection.update({
@@ -56,12 +69,22 @@ export async function syncUserLms(userId: string): Promise<SyncOutcome> {
         checkingStartedAt: null,
       },
     });
-    return { ok: true, totalSeen: detected.totalSeen, newCount: detected.newCount, baseline, emailsSent: emails.sent };
+    return {
+      ok: true,
+      totalSeen: detected.totalSeen,
+      newCount: detected.newCount,
+      baseline,
+      emailsSent: emails.sent,
+      pendingCount: detected.pendingCount,
+      unreadCount: detected.unreadCount,
+    };
   } catch (error) {
     const isAuth = error instanceof LmsAuthError;
-    const code =
+    // Prisma errors (for example a missing column because "npm run db:deploy" was not run) are not e-GURO's fault.
+    const isDatabase = /Prisma/i.test((error as Error)?.constructor?.name ?? "") || /column .* does not exist|relation .* does not exist/i.test(String((error as Error)?.message));
+    const code = isDatabase ? "DATABASE_ERROR" :
       (error as { code?: string }).code && typeof (error as { code?: string }).code === "string" &&
-      ["AUTH_FAILED", "TEMPORARY", "FORMAT_CHANGED"].includes((error as { code: string }).code)
+      ["AUTH_FAILED", "TEMPORARY", "FORMAT_CHANGED", "DATABASE_ERROR"].includes((error as { code: string }).code)
         ? (error as { code: string }).code
         : "INTERNAL";
     // Stored credentials we cannot decrypt (for example the key changed) need a reconnect too.

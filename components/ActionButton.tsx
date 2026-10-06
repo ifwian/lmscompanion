@@ -30,6 +30,7 @@ export default function ActionButton({
       const response = await fetch(url, { method: "POST" });
       const result = await response.json().catch(() => ({}));
       if (!response.ok) setMessage(result.error ?? "Something went wrong.");
+      else if (result.message) setMessage(result.message);
       router.refresh(); // always refresh: a failed check changes the connection status shown on the page
     } catch {
       setMessage("Could not reach the server.");

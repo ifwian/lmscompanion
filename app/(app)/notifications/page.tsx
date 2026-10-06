@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { getDb } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth/session";
 import ActionButton from "@/components/ActionButton";
-import { TYPE_LABEL, formatDateTime } from "@/lib/ui/format";
+import { formatDateTime, typeLabel } from "@/lib/ui/format";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Notifications · e-GURO Companion" };
@@ -45,7 +45,7 @@ export default async function NotificationsPage() {
               <li className="item" key={n.id}>
                 <span className={isNew ? "badge badge-new" : "badge"}>{isNew ? "New" : "Read"}</span>
                 <div className="item-main">
-                  <p className="item-meta">{[course ? [course.courseCode, course.courseName].filter(Boolean).join(" ") : null, TYPE_LABEL[n.notificationType]].filter(Boolean).join(" · ")}</p>
+                  <p className="item-meta">{[course ? [course.courseCode, course.courseName].filter(Boolean).join(" ") : null, typeLabel(n.notificationType, n.activity.lmsType, n.activity.isMaterial)].filter(Boolean).join(" · ")}</p>
                   <p className="item-title">{n.activity.title}</p>
                   <p className="item-meta">{formatDateTime(n.createdAt)} · {EMAIL_LABEL[n.emailStatus]}</p>
                 </div>

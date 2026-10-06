@@ -6,7 +6,7 @@ type Prefs = { activitiesEnabled: boolean; quizzesEnabled: boolean; assignmentsE
 
 const ROWS: { key: keyof Prefs; label: string }[] = [
   { key: "activitiesEnabled", label: "New activities" },
-  { key: "quizzesEnabled", label: "New quizzes" },
+  { key: "quizzesEnabled", label: "New quizzes & assessments" },
   { key: "assignmentsEnabled", label: "New assignments" },
   { key: "announcementsEnabled", label: "Announcements" },
 ];

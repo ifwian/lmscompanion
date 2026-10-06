@@ -1,18 +1,18 @@
 // DEVELOPMENT TEST FIXTURE: a pretend e-GURO server. NOT the real e-GURO and NOT used by the app in production.
-// It copies the request/response shape of the OLD PROTOTYPE (login form with token_login_form, /app/login.php,
-// /app/course_filter.php returning JSON), so we can test duplicate detection, emails and error handling offline.
-// Passing tests against this mock does NOT prove the real e-GURO works. See docs/MANUAL_STEPS.md.
+// It copies what the real site was seen doing in diagnostic reports (October 2026): login form with token_login_form,
+// /app/login.php, /app/course_filter.php (a page listing classes in "var global_class = [...]"), and
+// /app/table_course.php (JSON { last_page, total_record, data }) with filter_text / filter_type / page / size.
+// Passing tests against this mock does NOT prove the real e-GURO works for every student.
 import http from "node:http";
 
 export function startMockLms(port = 4000) {
-  const accounts = new Map(); // username -> { password, items: [{ lmsType, id, title, due }] }
+  const accounts = new Map(); // username -> { password, courses, items }
   const sessions = new Map(); // cookie value -> username
-  const stats = { loginAttempts: {}, listCalls: 0 };
+  const stats = { loginAttempts: {}, tableCalls: 0 };
   const mode = { down: false, breakFormat: false };
 
   const loginPage = `<html><body><form method="post" action="/app/login.php?formSubmitted=true">
     <input type="hidden" name="token_login_form" value="mock-token">
-    <input type="hidden" name="agents" value="">
     <input type="text" name="username"><input type="password" name="password">
     <button name="submit" value="login">LOGIN</button></form></body></html>`;
 
@@ -29,8 +29,10 @@ export function startMockLms(port = 4000) {
     // ---- test control endpoints (not part of the pretend LMS) ----
     if (url.pathname === "/__admin") {
       const cmd = JSON.parse((await readBody(req)) || "{}");
-      if (cmd.addAccount) accounts.set(cmd.addAccount.username, { password: cmd.addAccount.password, items: [] });
+      if (cmd.addAccount) accounts.set(cmd.addAccount.username, { password: cmd.addAccount.password, courses: cmd.addAccount.courses ?? [], items: [] });
       if (cmd.addItem) accounts.get(cmd.addItem.username).items.push(cmd.addItem.item);
+      if (cmd.addItems) accounts.get(cmd.addItems.username).items.push(...cmd.addItems.items);
+      if (cmd.setLists) { const item = accounts.get(cmd.setLists.username).items.find((i) => i.id === cmd.setLists.id); item.lists = cmd.setLists.lists; }
       if (cmd.setPassword) accounts.get(cmd.setPassword.username).password = cmd.setPassword.password;
       if (cmd.down !== undefined) mode.down = cmd.down;
       if (cmd.breakFormat !== undefined) mode.breakFormat = cmd.breakFormat;
@@ -53,21 +55,41 @@ export function startMockLms(port = 4000) {
       return send(200, "text/html", loginPage); // wrong login shows the form again
     }
 
+    const username = userFor(req);
+
     if (url.pathname === "/app/main_student.php") {
-      return userFor(req) ? send(200, "text/html", "<html><body>Dashboard</body></html>") : send(200, "text/html", loginPage);
+      return username ? send(200, "text/html", "<html><body>Dashboard</body></html>") : send(200, "text/html", loginPage);
     }
 
     if (url.pathname === "/app/course_filter.php") {
-      const username = userFor(req);
       if (!username) return send(200, "text/html", loginPage);
-      stats.listCalls += 1;
+      const classes = [{ teacher_class_student_id: 0, teacher_class_id: 0, student_id: 0, teacher_id: 0, class_name: "", subject_code: "ALL CLASS", subject_text: "", status: "" },
+        ...accounts.get(username).courses.map((c) => ({ teacher_class_student_id: 1, student_id: 1, teacher_id: 1, status: "", ...c }))];
+      return send(200, "text/html", `<html><body><script>var global_filter = 'ASSIGNED'; var global_filter_type = 'ALL'; var global_class_id = '0'; var global_class = ${JSON.stringify(classes)}; var x = 1;</script></body></html>`);
+    }
+
+    if (url.pathname === "/app/table_course.php") {
+      if (!username) return send(200, "text/html", loginPage);
+      stats.tableCalls += 1;
       if (mode.breakFormat) return send(200, "text/html", "<html><body>New layout!</body></html>");
       const filter = url.searchParams.get("filter_text");
-      const type = url.searchParams.get("type_text");
-      const data = filter === "ASSIGNED"
-        ? accounts.get(username).items.filter((i) => i.lmsType === type).map((i) => ({ class_exam_id: i.id, title: i.title, mark_type: i.lmsType, from_date: "2026-10-01 08:00:00", to_date: i.due ?? "" }))
-        : [];
-      return send(200, "application/json", JSON.stringify({ data }));
+      const type = url.searchParams.get("filter_type") ?? "";
+      const page = Number(url.searchParams.get("page") ?? 1);
+      const size = Number(url.searchParams.get("size") ?? 30);
+      // Which list an item is in: ASSIGNED by default, or whatever the test sets with "lists".
+      // DUE_TODAY repeats the first assigned item (tests de-duplication and "strongest status wins").
+      const matching = accounts.get(username).items.filter((i) => type === "" || i.lmsType === type);
+      const assigned = matching.filter((i) => (i.lists ?? ["ASSIGNED"]).includes("ASSIGNED"));
+      const rowsAll = filter === "DUE_TODAY" ? assigned.slice(0, 1) : matching.filter((i) => (i.lists ?? ["ASSIGNED"]).includes(filter));
+      // Row shape copied from the real reports. UNREAD rows have no mark_type (like the real site).
+      const rows = rowsAll.slice((page - 1) * size, page * size).map((i) => ({
+        class_exam_id: String(i.id), title: i.title, date_added: "2026-10-01 07:00:00", term: "2",
+        teacher_class_id: String(i.course ?? accounts.get(username).courses[0]?.teacher_class_id ?? 0),
+        exam_type: "1", submit_answer: i.submit ?? "1",
+        date_deadline: i.due || "0000-00-00 00:00:00", from_date: "2026-10-01 08:00:00", to_date: i.due || "0000-00-00 00:00:00",
+        ...(filter === "UNREAD" ? {} : { review_date: "2026-10-30", grade: null, status: "", mark_type: i.lmsType }),
+      }));
+      return send(200, "application/json; charset=utf-8", JSON.stringify({ last_page: Math.ceil(rowsAll.length / size), data: rows, total_record: rowsAll.length }));
     }
     send(404, "text/plain", "not found");
   });

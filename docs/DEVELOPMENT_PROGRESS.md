@@ -107,3 +107,45 @@ Legend: **Verified** = tested in the build environment. **Unverified** = written
 - **Fixed:** the page now refreshes after a failed check so the connection status is current; the panel explains the "format changed" state; forms use `method="post"` so a password can never end up in the address bar if JavaScript has not loaded.
 - **Design refresh:** Instrument Serif / Geist / Geist Mono (bundled), numbered navigation, new landing and sign-in pages, light/dark toggle (cookie, no flash), refined lists, panels, switches and mobile layout.
 - **Tested:** screenshots of every page in dark and light on desktop and in dark on a 390px phone, taken with a headless Chromium and reviewed; the 56-check end-to-end test was run again after the changes.
+
+## Update 2 — 2026-10-04 (first real diagnostic report)
+- **Finding:** login works; `/app/course_filter.php?...` returns a full HTML page (not JSON), so the old prototype's request no longer matches. The site's scripts mention `calendar_events.php`, `notif.php`, `main_student_class.php`, `grade_student_module.php`, `library.php`.
+- **Built:** diagnostic v2 (`npm run lms:diagnose`): reads the home page, the `course_filter.php` page, `calendar_events.php` and `notif.php`, and reports link patterns, table column names, UI labels and the code that makes data calls, with long text masked.
+- **Tested:** against a local pretend site; confirmed no titles, passwords, tokens or ids appear in the report.
+- **Not done yet:** the e-GURO reading code (`services/lms`) is unchanged until the v2 report arrives.
+
+## Update 3 — 2026-10-04 (second real diagnostic report)
+- **Findings:** the activity list page (`course_filter.php`) is a Tabulator table with remote pagination that loads rows from a separate address (`base_url`, not yet seen) using parameters `filter_text` and `filter_type`. Row fields seen in the page code: `class_exam_id`, `teacher_class_id`, `title`, `from_date`, `mark_type`, `term`. Items open through `open_lesson.php` / `open_exam.php` / `lessons.php`. The calendar page loads events by POST `ajax_cal_event.php` (`action=VIEW`) and a notifications table lives at `/app/table/notif_table.php`. The old prototype used the wrong parameter name (`type_text`) and expected JSON from a page address.
+- **Built:** diagnostic v3 follows those calls (finds `base_url`, reads the table the way the page does, shows field names, date formats and short value sets) with a locked-down read-only calendar request.
+- **Tested:** against a pretend site; no titles, ids, tokens or passwords appear in the report.
+- **Next:** rewrite `services/lms` from the v3 report.
+
+## Update 4 — 2026-10-04 (e-GURO reading code rewritten from the real reports)
+- **Findings used:** table rows come from `/app/table_course.php` (JSON `{last_page, total_record, data}`, params `filter_text`, `filter_type`, `page`, `size`); filters seen: ASSIGNED, DUE_TODAY, MISSED, UNREAD; type `ALL`; the filter page lists the student's classes in `var global_class = [...]` (teacher_class_id, subject_code, subject_text); item links follow `open_lesson.php` / `open_exam.php` with `id` (teacher_class_id), `param` (class_exam_id), `terms` (term), which matches the notification link format.
+- **Changed:** `services/lms/client.ts` (new flow: filter page first, then 4 filters, paged, about 5 to 6 requests per check instead of 14), `services/lms/parsers.ts` (new row and class parsers), courses are now saved and linked to activities, activities keep the posted date (new column `posted_at`, migration `20261004000000_activity_posted_at`), activity lists are ordered by posted date.
+- **Tested:** 17 parser checks and the end-to-end test (now 62 checks, 62 passed) including courses saved and linked, item links, EXAM shown as quiz, two-page lists (55 items), de-duplication across filters, and two students' courses never mixing.
+- **Not tested:** against the real e-GURO with a non-empty list (the only real list reply seen so far was empty), real item links opening, announcements (not built).
+
+## Update 5 — 2026-10-05 (pending item missing; email design)
+- **Report:** the real e-GURO dashboard showed 1 pending item under "Assigned: Activity & Quiz", but the app listed nothing.
+- **Cause found from the dashboard and reports:** the dashboard cards map "Activity & Quiz" to type LESSON and "Assessment" to type EXAM, and the page's own filter code uses fixed pairs. The app asked with type `ALL`, which has never been seen to work. The app now asks with exactly the dashboard pairs: ASSIGNED and DUE_TODAY for LESSON and EXAM, and MISSED for every type. UNREAD (unread lesson material, 19 items) is left out on purpose.
+- **Changed:** EXAM is shown as "Assessment" (not "Quiz"); the email was redesigned (see `docs/EMAIL_PREVIEW.md`); optional `APP_URL` for the Settings link; new `npm run check` (one checker pass on your computer); diagnostic v4 probes each dashboard pair and "ALL" and shows the row fields.
+- **Tested:** end-to-end test now 63 checks, 63 passed (includes the email's item link); email screenshots at desktop and phone width.
+- **Not confirmed:** that the real server returns the pending item for ASSIGNED + LESSON (the only real list reply seen was an empty DUE_TODAY one), and the real row field names.
+
+## Update 6 — 2026-10-05 (pending section, unread lessons, email test)
+- **Report used:** diagnostic v4 shows `ASSIGNED` + `LESSON` returns the pending item with these row fields: class_exam_id, title, date_added, term, teacher_class_id, exam_type, submit_answer, date_deadline, from_date, to_date, review_date, grade, status, mark_type. The UNREAD list has no mark_type; its rows have submit_answer 0 (reading lessons). `last_page` and `total_record` are 0 even when rows exist.
+- **Changed:** the app now keeps each item's CURRENT state (pending status, unread, material), refreshed on every check and cleared when an item is handed in or opened. Migration `20261005000000_activity_state`. New dashboard: four numbers, a prominent Pending activities section, a separate Unread lessons section. Activities page tabs: Pending / Unread / Read / All. Reading lessons never send email. Pagination also continues when a page is full, because last_page is unreliable.
+- **Email:** new Send test email button (Settings) and `npm run email:test`; clear error messages (wrong login, unreachable server, sender mismatch); app passwords with spaces now work; stale unsent notifications (older than 3 days) are skipped; Settings shows whether email is set up on the server.
+- **Reliability:** `/status` shows whether database updates were applied; a missing update now shows a clear message instead of a confusing connection error; "Check now" tells you what it found.
+- **Scheduler:** the GitHub workflow now skips quietly until the app is deployed (no more failure emails).
+- **Tested:** end-to-end 80 checks, 80 passed (includes pending/unread sections, lessons sending no email, new work sending exactly one email, handed-in items clearing, the test-email button); parser checks 25 passed; email command tested for success, wrong password, unreachable server, not configured, and an app password written with spaces; screenshots of dashboard (dark and light), unread view and phone layout.
+- **Not confirmed on the real account:** which date the website shows as the due date; that the real item links open; real Gmail delivery.
+
+## Update 7 — 2026-10-06 (from "one person's tool" to a site for classmates)
+- **Request:** students should just open the site and sign up, with no GitHub, Neon or `.env`, and no per-student hosting.
+- **Finding:** the app already was one multi-user site that stores each student's e-GURO password encrypted from the website form. The manual guide was the OWNER's one-time setup. So the work was making that safe and easy, not a redesign.
+- **Built:** invite code; privacy page and consent; email confirmation (notifications only to confirmed addresses); forgot and reset password; delete my account; owner summary (counts only); checker runs a few students at a time and uses Vercel Hobby's 300 s limit; `npm run setup` wizard for the owner; migration `20261006000000_accounts_tokens`; docs `ARCHITECTURE.md`, `DEPLOY_ONCE.md`, `FOR_CLASSMATES.md`.
+- **Corrected earlier advice:** GitHub's free plan gives private repositories only 2,000 Actions minutes a month, so a scheduler there needs a public repository or a free external scheduler.
+- **Tested:** end-to-end test now 116 checks, 116 passed (adds invite code refusal, consent, confirmation links including old-link invalidation and single use, no email to unconfirmed addresses and delivery after confirming, forgot and reset flow, old sessions signed out, owner summary has no personal data, delete account removes everything, other students untouched); wizard run in a temporary folder.
+- **Not tested:** real Vercel, Neon, Gmail, cron-job.org or GitHub scheduler; many real students at once; the wizard's database step (my environment cannot download Prisma's migration engine).
