@@ -98,9 +98,9 @@ function renderCard(card: Card) {
 
 // ---------- new item notification ----------
 export type EmailOptions = {
-  kicker?: string; // replaces "New <type>" above the title (used by the test email)
-  subject?: string; // replaces the generated subject
-  footer?: string; // replaces the footer text
+  kicker?: string;
+  subject?: string;
+  footer?: string;
   hideLoginHint?: boolean;
 };
 
@@ -137,7 +137,6 @@ export function buildEmail(activity: EmailActivity, lmsUrl: string, settingsUrl:
   });
 }
 
-// The message sent by "Send test email" (Settings) and by "npm run email:test". Clearly marked as a test.
 export function buildTestEmail(lmsUrl: string, settingsUrl: string | null = null) {
   return buildEmail(
     { type: "ACTIVITY", title: "Your e-GURO Companion email is working", courseLabel: null, detectedAt: new Date(), dueDate: null, url: null },
