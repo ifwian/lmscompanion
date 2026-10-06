@@ -36,3 +36,18 @@ Date: 2026-10-03. This is a review of my own code plus the automated tests in `s
 - Forms use `method="post"` as a safety net (no password in the address bar if JavaScript fails).
 - The theme choice is stored in a plain cookie that holds only `light` or `dark`; there is no inline script and no `dangerouslySetInnerHTML` anywhere.
 - The diagnostic script hides page text by default and never prints the password or cookie values; its output file is ignored by Git.
+
+## Added for a many-student site (October 2026)
+
+| Area | What was done |
+|---|---|
+| Sign-up abuse | Optional invite code (compared in constant time), consent box required, per-IP limit raised so a shared campus connection is not blocked |
+| Account takeover | Per-account login limit (10 per 15 minutes) in addition to the per-IP limit. Trade-off: someone could lock a victim out for 15 minutes by guessing wrongly; accepted |
+| Email addresses | Notifications are only sent to confirmed addresses. Confirm and reset links are one-time, expire (24 h / 1 h), and only a SHA-256 hash is stored |
+| Link poisoning | Links in emails are built from `APP_URL`, never from the request's Host header in production |
+| Password reset | Same answer for known and unknown emails; a reset signs out every older session; opening the link also confirms the address |
+| Data removal | Delete account (password required) removes the user and, by database cascade, the encrypted e-GURO password, courses, activities, notifications and tokens (tested) |
+| Owner visibility | `/api/admin/summary` needs `CRON_SECRET` and returns counts only |
+| Privacy | `/privacy` states plainly that the e-GURO password is stored encrypted and who can reach the database |
+
+Still limitations: in-memory rate limiting is per server instance; no CAPTCHA; the site owner holds both the database and the encryption key, so students must trust them; e-GURO may have rules about automated access.

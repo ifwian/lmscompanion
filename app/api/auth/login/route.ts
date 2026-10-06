@@ -11,7 +11,7 @@ const BAD_LOGIN = { error: "Email or password is incorrect." };
 
 export async function POST(request: Request) {
   if (!isSameOrigin(request)) return Response.json({ error: "Request blocked." }, { status: 403 });
-  if (isRateLimited(`login:${clientKey(request)}`, 10, 15 * 60 * 1000)) {
+  if (isRateLimited(`login:${clientKey(request)}`, 100, 15 * 60 * 1000)) {
     return Response.json({ error: "Too many attempts. Try again in a few minutes." }, { status: 429 });
   }
 
@@ -25,7 +25,12 @@ export async function POST(request: Request) {
     return Response.json(BAD_LOGIN, { status: 401 });
   }
 
-  const user = await getDb().user.findUnique({ where: { email: normalizeEmail(body.email) } });
+  // Per-account limit too: many classmates can share one campus IP, so the account is what we protect.
+  const email = normalizeEmail(body.email);
+  if (isRateLimited(`login-email:${email}`, 10, 15 * 60 * 1000)) {
+    return Response.json({ error: "Too many attempts. Try again in a few minutes." }, { status: 429 });
+  }
+  const user = await getDb().user.findUnique({ where: { email } });
   // Always run one bcrypt comparison, even for unknown emails (see DUMMY_HASH).
   const passwordOk = await verifyPassword(body.password, user?.passwordHash ?? DUMMY_HASH);
   if (!user || !passwordOk) return Response.json(BAD_LOGIN, { status: 401 });

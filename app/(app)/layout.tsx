@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import ActionButton from "@/components/ActionButton";
 import AppNav from "@/components/AppNav";
 import { getCurrentUser } from "@/lib/auth/session";
 
@@ -12,6 +13,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <div className="shell">
       <AppNav name={user.name} />
       <main className="content reveal" id="main">
+        {!user.emailVerifiedAt && (
+          <div className="banner" role="status">
+            <p>Confirm your email address ({user.email}) to receive notifications. We sent you a link when you signed up.</p>
+            <ActionButton url="/api/auth/resend-verification" label="Send the link again" busyLabel="Sending…" />
+          </div>
+        )}
         {children}
       </main>
     </div>

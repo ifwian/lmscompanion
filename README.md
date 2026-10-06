@@ -4,7 +4,7 @@
 
 A free, multi-user web app that watches a student's own e-GURO account (City College of Calamba LMS) and emails them when something new appears.
 
-**Read `MANUAL_STEPS.md` first.** It lists everything you must do yourself, in order.
+**Owner: read `MANUAL_STEPS.md` and `docs/DEPLOY_ONCE.md`. Students: read `docs/FOR_CLASSMATES.md`.** One hosted copy serves everyone; students only sign up on the website. See `docs/ARCHITECTURE.md`.
 
 ## Honest status
 
@@ -17,8 +17,8 @@ A free, multi-user web app that watches a student's own e-GURO account (City Col
 | Scheduled checker, per-student failure handling | Built and tested |
 | Dashboard, Courses, Activities, Notifications, Settings pages | Built; page content checked by tests; **not viewed in a real browser** |
 | **Real e-GURO login** | **Works** (confirmed on a real account) |
-| **Real e-GURO activity data** | **NOT working yet.** Reading the activity list fails; run `npm run lms:diagnose` and send the report (see `MANUAL_STEPS.md`, section B) |
-| Courses list, announcements, item links | Not available until the real e-GURO responses are captured |
+| **Real e-GURO classes and activities** | **Rewritten from your real diagnostic reports; tested against a pretend e-GURO of the same shape, NOT yet confirmed on a real account.** See `MANUAL_STEPS.md`, section B |
+| Announcements | Not available yet (address not seen) |
 | Production deployment (Vercel / Neon / GitHub Actions) | Documented, **not tested** |
 
 ## Features
@@ -29,7 +29,8 @@ A free, multi-user web app that watches a student's own e-GURO account (City Col
 - Never emails the same item twice (unique key per student plus item)
 - Per-type email switches (activities, quizzes, assignments, announcements); daily summary is off and not built
 - If your e-GURO password changes, checking stops after one rejected login and you are asked to reconnect
-- Pages: Overview, Courses, Activities (filters), Notifications (read / mark all read), Settings
+- Pages: Overview (big Pending activities section + separate Unread lessons), Courses, Activities (tabs: Pending / Unread / Read / All), Notifications (read / mark all read), Settings (with a Send test email button)
+- Made for a class: invite code, privacy notice and consent, email confirmation, forgot password, delete account, and an owner summary that shows counts only
 - Light and dark mode, mobile layout, keyboard friendly
 
 ## Tech stack (all free tiers)
@@ -61,12 +62,13 @@ Node.js 20 or newer, a PostgreSQL database (free Neon), a Gmail account for send
 
 ```bash
 npm install                # also runs "prisma generate"
-cp .env.example .env       # then fill in the values (see MANUAL_STEPS.md)
-npm run db:deploy          # creates the tables
+npm run setup              # makes .env for you (secrets, database, Gmail) and creates the tables
 npm run dev                # http://localhost:3000
 ```
 
 Design: Instrument Serif, Geist and Geist Mono (bundled, nothing loads from outside), light and dark theme with a toggle. See `DESIGN.md`.
+
+Parser checks (25): `npm run test:parsers`. Email test: `npm run email:test`. One checker pass on your own computer: `npm run check`. Email preview: `docs/EMAIL_PREVIEW.md`.
 
 Pages: `/register`, `/login`, `/dashboard`, `/courses`, `/activities`, `/notifications`, `/settings`, `/status` (health check), `/api/health` (JSON).
 
@@ -91,7 +93,7 @@ GitHub Actions calls `POST /api/cron/check` with `CRON_SECRET` about every 15 mi
 
 ## Testing
 
-See `docs/TESTING.md`. In short: `scripts/dev/e2e.mjs` runs 56 checks against a pretend e-GURO.
+See `docs/TESTING.md`. In short: `scripts/dev/e2e.mjs` runs 116 checks against a pretend e-GURO.
 
 ## Deployment
 

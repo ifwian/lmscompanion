@@ -2,9 +2,9 @@
 
 ## What the automated test covers
 
-`scripts/dev/e2e.mjs` runs the whole flow against a **pretend e-GURO** (`scripts/dev/mock-lms.mjs`) and a **local fake mail server**. It makes 56 checks: registration, login rules, connecting e-GURO, the silent first check, new item -> notification -> email, no duplicate emails, notification preferences, two students never seeing each other's data, mark as read, e-GURO being down, e-GURO changing its format, a changed e-GURO password (only one login attempt), reconnecting, changing the app password, logout.
+`scripts/dev/e2e.mjs` runs the whole flow against a **pretend e-GURO** (`scripts/dev/mock-lms.mjs`) and a **local fake mail server**. It makes 116 checks: registration, login rules, connecting e-GURO, the silent first check, new item -> notification -> email, no duplicate emails, notification preferences, two students never seeing each other's data, mark as read, e-GURO being down, e-GURO changing its format, a changed e-GURO password (only one login attempt), reconnecting, changing the app password, logout.
 
-**Important:** the pretend e-GURO copies the old prototype's request shape. Passing these tests does NOT prove the real e-GURO works. That needs your own account (see `MANUAL_STEPS.md`, section B). The mock is a development test fixture only; it is not used when the app runs normally.
+**Important:** the pretend e-GURO copies the request and response shapes seen in the diagnostic reports (login, `course_filter.php` with the `global_class` list, `table_course.php` with pages). Passing these tests does NOT prove the real e-GURO works. That needs your own account (see `MANUAL_STEPS.md`, section B). The mock is a development test fixture only; it is not used when the app runs normally.
 
 ## Run it yourself
 
@@ -17,6 +17,8 @@ export AUTH_SECRET="$(node -e 'console.log(require("crypto").randomBytes(32).toS
 export ENCRYPTION_KEY="$(node -e 'console.log(require("crypto").randomBytes(32).toString("hex"))')"
 export CRON_SECRET="$(node -e 'console.log(require("crypto").randomBytes(24).toString("hex"))')"
 export LMS_BASE_URL="http://localhost:4000"
+export INVITE_CODE="class-2026"          # the test signs up with this code
+export APP_URL="http://localhost:3010"     # confirm and reset links point here
 export SMTP_HOST=localhost SMTP_PORT=2525 SMTP_SECURE=false MAIL_FROM="e-GURO Companion <test@example.com>"
 export DELAY_BETWEEN_USERS_MS=0
 
@@ -29,7 +31,9 @@ PORT=3010 npm run start &
 APP_URL=http://localhost:3010 node scripts/dev/e2e.mjs
 ```
 
-Expected last line: `Result: 56 passed, 0 failed`.
+Expected last line: `Result: 116 passed, 0 failed`.
+
+The parsers have their own 25 checks: `npm run test:parsers`.
 
 ## Manual checks still needed in a browser
 

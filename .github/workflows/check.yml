@@ -1,27 +1,35 @@
-# Free scheduler: every ~15 minutes GitHub calls your deployed app's checker endpoint.
+# Free scheduler: every ~5 minutes GitHub calls your deployed app's checker endpoint (each student is only checked
+# when their own 15-minute timer is due, so extra calls cost almost nothing).
+#
+# IMPORTANT: GitHub gives PRIVATE repositories only 2,000 free Actions minutes a month; a run every 5 minutes uses far more.
+# Public repositories are free. If your repository is private, use a free external scheduler instead (see docs/DEPLOY_ONCE.md).
 # The checker itself runs on Vercel (not here), so e-GURO sees requests from Vercel, not from GitHub.
 # Needs two repository secrets: APP_URL (for example https://your-app.vercel.app) and CRON_SECRET (same value as on Vercel).
 name: Check LMS
 
 on:
   schedule:
-    - cron: "*/15 * * * *" # GitHub may delay scheduled runs by several minutes
+    - cron: "*/5 * * * *" # GitHub may delay scheduled runs by several minutes
   workflow_dispatch: {} # lets you run it by hand from the Actions tab
 
 jobs:
   trigger:
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 6
     steps:
       - name: Call the checker
         env:
           APP_URL: ${{ secrets.APP_URL }}
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
-          test -n "$APP_URL" && test -n "$CRON_SECRET" || { echo "APP_URL and CRON_SECRET secrets are required"; exit 1; }
+          # Not deployed yet? Do nothing, and do not fail (a failing schedule sends you an email every run).
+          if [ -z "$APP_URL" ] || [ -z "$CRON_SECRET" ]; then
+            echo "APP_URL or CRON_SECRET is not set yet. Skipping this run."
+            exit 0
+          fi
           status=$(curl -sS -o response.json -w "%{http_code}" -X POST \
             -H "Authorization: Bearer $CRON_SECRET" \
-            --max-time 90 "$APP_URL/api/cron/check")
+            --max-time 280 "$APP_URL/api/cron/check")
           echo "HTTP status: $status"
           cat response.json
           test "$status" = "200"
