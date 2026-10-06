@@ -111,7 +111,63 @@ export function buildEmail(activity: EmailActivity, lmsUrl: string, settingsUrl:
   return { subject, text, html };
 }
 
-// The message sent by "Send test email" (Settings) and by "npm run email:test". Clearly marked as a test.
+// The one-time account emails: confirm your address, and choose a new password. Same look as the
+// notification email above, but no course and no LMS link, because neither applies here.
+const ACCOUNT_COPY = {
+  verify: {
+    label: "Email verification",
+    heading: "Confirm your email address",
+    intro: "Confirm your address to finish setting up your e-GURO Companion account.",
+    action: "Confirm email address",
+    ignored: "If you did not create an account, you can ignore this email.",
+  },
+  reset: {
+    label: "Password reset",
+    heading: "Reset your password",
+    intro: "Someone asked to reset the password for this account. Choose a new one using the link below.",
+    action: "Reset password",
+    ignored: "If you did not ask for this, nothing has changed and you can ignore this email.",
+  },
+} as const;
+
+export function buildAccountEmail(type: "verify" | "reset", url: string, name: string) {
+  const copy = ACCOUNT_COPY[type];
+  const subject = oneLine(`[ e-GURO ] ${copy.heading}`);
+  const link = safeUrl(url, "");
+  const greeting = `Hello ${oneLine(name)},`;
+
+  const text =
+    `${greeting}\n\n${copy.intro}\n\n` +
+    `${copy.action}: ${link}\n\n` +
+    `This link can be used once and expires soon.\n\n` +
+    `${copy.ignored}\n\n` +
+    `--\ne-GURO Companion\n`;
+
+  const mono = "'SFMono-Regular',Consolas,'Liberation Mono',Menlo,'Courier New',monospace";
+  const html =
+    `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">` +
+    `<meta name="color-scheme" content="light"><title>${escapeHtml(subject)}</title></head>` +
+    `<body style="margin:0;padding:0;background:#f3f3f3">` +
+    `<div style="display:none;max-height:0;overflow:hidden;opacity:0;font-size:1px;line-height:1px">${escapeHtml(copy.intro)}</div>` +
+    `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f3f3f3"><tr><td align="center" style="padding:28px 12px">` +
+    `<table role="presentation" width="520" cellpadding="0" cellspacing="0" style="width:100%;max-width:520px;background:#ffffff;border:1px solid #e0e0e0">` +
+    `<tr><td style="padding:18px 28px;border-bottom:1px solid #e5e5e5;font:12px/1 ${mono};letter-spacing:2px;text-transform:uppercase;color:#111111">e-GURO <span style="color:#888888">Companion</span></td></tr>` +
+    `<tr><td style="padding:30px 28px 6px">` +
+    `<div style="font:11px/1 ${mono};letter-spacing:2px;text-transform:uppercase;color:#666666;padding-bottom:12px">${escapeHtml(copy.label)}</div>` +
+    `<div style="font:26px/1.2 Georgia,'Times New Roman',serif;color:#000000;padding-bottom:16px">${escapeHtml(copy.heading)}</div>` +
+    `<div style="font:15px/1.5 Arial,Helvetica,sans-serif;color:#333333;padding-bottom:8px">${escapeHtml(greeting)}</div>` +
+    `<div style="font:15px/1.5 Arial,Helvetica,sans-serif;color:#333333">${escapeHtml(copy.intro)}</div>` +
+    `</td></tr>` +
+    `<tr><td style="padding:22px 28px 10px"><table role="presentation" cellpadding="0" cellspacing="0"><tr><td style="background:#000000">` +
+    `<a href="${escapeHtml(link)}" style="display:inline-block;padding:13px 24px;font:13px/1 ${mono};letter-spacing:1.5px;text-transform:uppercase;color:#ffffff;text-decoration:none">${escapeHtml(copy.action)}</a>` +
+    `</td></tr></table></td></tr>` +
+    `<tr><td style="padding:0 28px 24px;font:13px/1.5 Arial,Helvetica,sans-serif;color:#666666">This link can be used once and expires soon.</td></tr>` +
+    `<tr><td style="padding:16px 28px;border-top:1px solid #e5e5e5;font:12px/1.5 Arial,Helvetica,sans-serif;color:#777777">${escapeHtml(copy.ignored)}</td></tr>` +
+    `</table></td></tr></table></body></html>`;
+
+  return { subject, text, html };
+}
+
 export function buildTestEmail(lmsUrl: string, settingsUrl: string | null = null) {
   return buildEmail(
     { type: "ACTIVITY", title: "Your e-GURO Companion email is working", courseLabel: null, detectedAt: new Date(), dueDate: null, url: null },

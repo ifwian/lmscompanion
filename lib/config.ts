@@ -16,3 +16,10 @@ export const config = {
   // Public address of this app (used for the Settings link in emails). Optional.
   appUrl: () => (process.env.APP_URL ?? "").replace(/\/+$/, "") || null,
 };
+
+export function linkBase(request: Request): string | null {
+  const host = request.headers.get("host");
+  if (!host) return config.appUrl();
+  const proto = request.headers.get("x-forwarded-proto") ?? (host.includes("localhost") ? "http" : "https");
+  return `${proto}://${host}`;
+}

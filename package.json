@@ -39,7 +39,7 @@
     "@types/react-dom": "^19.3.0",
     "node-html-parser": "^9.0.4",
     "pg": "^8.23.1",
-    "prisma": "^8.0.0-rc.19",
+    "prisma": "7.10.0",
     "smtp-server": "^3.19.16",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2"

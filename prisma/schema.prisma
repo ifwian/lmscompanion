@@ -36,6 +36,8 @@ model User {
   id                String   @id @default(uuid())
   name              String
   email             String   @unique // always stored lowercase
+  emailVerifiedAt   DateTime? @map("email_verified_at") // null until email is verified
+  termsAcceptedAt   DateTime? @map("terms_accepted_at") // when the user accepted the terms
   passwordHash      String   @map("password_hash") // bcrypt hash, never the password
   passwordChangedAt DateTime? @map("password_changed_at") // sessions issued before this are rejected
   createdAt         DateTime @default(now()) @map("created_at")
@@ -46,6 +48,7 @@ model User {
   courses                 Course[]
   activities              Activity[]
   notifications           Notification[]
+  authTokens              AuthToken[]
 
   @@map("users")
 }
@@ -142,6 +145,21 @@ model Notification {
   @@index([userId, createdAt(sort: Desc)])
   @@index([emailStatus])
   @@map("notifications")
+}
+
+model AuthToken {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  type      String
+  tokenHash String   @map("token_hash")
+  usedAt    DateTime? @map("used_at")
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([tokenHash])
+  @@map("auth_tokens")
 }
 
 model NotificationPreference {
