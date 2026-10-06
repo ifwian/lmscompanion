@@ -26,7 +26,13 @@ next-env.d.ts
 cookies.txt
 session*.json
 
+# Neon auth and agents
+.neon
+.agents/
+skills-lock.json
+
+# temporary smtp auth file
+smtp-auth.tmp.mjs
+
 # diagnostic output
 diagnose-output.txt
-
-email-preview-*.html

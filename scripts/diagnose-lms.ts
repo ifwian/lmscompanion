@@ -10,7 +10,7 @@
 import { writeFileSync } from "node:fs";
 import { createInterface } from "node:readline";
 import { parse, type HTMLElement } from "node-html-parser";
-import { diagnosticGet, diagnosticLoginPage, diagnosticPostCalendarView, getLMSSession } from "../services/lms/client";
+import { diagnosticGet, diagnosticLoginPage, getLMSSession } from "../services/lms/client";
 import { LmsAuthError } from "../services/lms/errors";
 
 const showValues = process.argv.includes("--show-values");
@@ -75,7 +75,7 @@ function inlineScripts(html: string): string[] {
     .map((s) => s.rawText);
 }
 
-const NEEDLES = ["base_url", "global_filter", "global_filter_type", "ajaxURL", "ajaxParams", "ajaxResponse", "paginationSize", "last_page", "teacher_class_id", "class_exam_id"];
+const NEEDLES = ["course_filter", "calendar_events", "notif.php", "ajaxURL", "ajaxConfig", "$.ajax", "$.post", "$.get(", "fetch(", "main_student_class", "url:"];
 
 function codeSnippets(scripts: string[]): string[] {
   const found = new Set<string>();
@@ -83,16 +83,16 @@ function codeSnippets(scripts: string[]): string[] {
     for (const needle of NEEDLES) {
       let from = 0;
       let count = 0;
-      while (count < 2) {
+      while (count < 3) {
         const at = script.indexOf(needle, from);
         if (at < 0) break;
-        found.add(mask(script.slice(Math.max(0, at - 100), at + 260).replace(/\s+/g, " ")));
+        found.add(mask(script.slice(Math.max(0, at - 120), at + 220).replace(/\s+/g, " ")));
         from = at + needle.length;
         count++;
       }
     }
   }
-  return [...found].slice(0, 28);
+  return [...found].slice(0, 40);
 }
 
 function tableFieldNames(scripts: string[]): string[] {
@@ -146,68 +146,26 @@ function describePage(html: string) {
   };
 }
 
-// ---------- v3: follow the page's own data calls ----------
-const DATE_KEY = /date|time|created|start|end|due/i;
-const FREE_TEXT_KEY = /name|title|log|desc|user|email|message|text|teacher|subject|(^|_)id$|_id_|token/i;
-
-function digitsToNines(text: string) {
-  return text.replace(/\d/g, "9");
-}
-
-// Describes a list of rows: field names, value types/lengths, date formats and short enumerations (like LESSON / EXAM).
-function describeRows(rows: unknown[]) {
-  const first = (rows[0] ?? {}) as Record<string, unknown>;
-  const fields: Record<string, string> = {};
-  const enums: Record<string, string[]> = {};
-  const dateFormats: Record<string, string[]> = {};
-  for (const key of Object.keys(first)) {
-    const value = first[key];
-    fields[key] = typeof value === "string" ? `string(${value.length})` : value === null ? "null" : typeof value;
-    const values = rows.map((row) => (row as Record<string, unknown>)[key]).filter((v) => typeof v === "string" || typeof v === "number") as (string | number)[];
-    if (DATE_KEY.test(key)) {
-      dateFormats[key] = [...new Set(values.map((v) => digitsToNines(String(v))))].slice(0, 3);
-    } else if (!FREE_TEXT_KEY.test(key)) {
-      const distinct = [...new Set(values.map(String))];
-      if (distinct.length > 0 && distinct.length <= 12 && distinct.every((v) => v.length <= 24 && !/^\d{5,}$/.test(v))) enums[key] = distinct;
+async function probe(session: Awaited<ReturnType<typeof getLMSSession>>, label: string, path: string, ajax: boolean) {
+  out(`\n${label}  GET ${path}`);
+  try {
+    const result = await diagnosticGet(session, path, ajax);
+    const summary: Record<string, unknown> = { status: result.status, contentType: result.contentType, length: result.body.length };
+    try {
+      summary.json = describeJson(JSON.parse(result.body));
+    } catch {
+      summary.notJson = true;
+      if (/<html|<!doctype/i.test(result.body)) Object.assign(summary, { page: describePage(result.body) });
+      else summary.textStart = showValues ? result.body.slice(0, 200) : `(hidden, ${result.body.length} chars)`;
     }
-  }
-  return { rowCount: rows.length, fields, dateFormats, shortValueSets: enums };
-}
-
-function describeAny(body: string) {
-  let json: unknown;
-  try {
-    json = JSON.parse(body);
-  } catch {
-    return { notJson: true, length: body.length, looksLikeHtml: /<html|<!doctype/i.test(body), start: showValues ? body.slice(0, 160) : "(hidden)" };
-  }
-  const rows = Array.isArray(json) ? json : Array.isArray((json as { data?: unknown })?.data) ? ((json as { data: unknown[] }).data) : null;
-  const topLevel: Record<string, unknown> = {};
-  if (json && typeof json === "object" && !Array.isArray(json)) {
-    for (const [k, v] of Object.entries(json)) topLevel[k] = typeof v === "number" ? v : Array.isArray(v) ? `list(${v.length})` : typeof v;
-  }
-  return { json: true, topLevel, rows: rows ? describeRows(rows) : "(no list found)" };
-}
-
-async function safeGet(session: Awaited<ReturnType<typeof getLMSSession>>, path: string, ajax: boolean) {
-  try {
-    return await diagnosticGet(session, path, ajax);
+    out(JSON.stringify(summary, null, 2));
   } catch (error) {
-    out(`Request failed for ${path.split("?")[0]}: ${(error as Error).name}`);
-    return null;
+    out(`Request failed: ${(error as Error).name}: ${(error as Error).message}`);
   }
-}
-
-function literalValues(scripts: string[], name: string): string[] {
-  const found = new Set<string>();
-  for (const script of scripts) {
-    for (const m of script.matchAll(new RegExp(`\\b${name}\\s*[=:]\\s*([^;\\n]{0,140})`, "g"))) found.add(mask(m[1].trim()));
-  }
-  return [...found].slice(0, 6);
 }
 
 async function main() {
-  out(`e-GURO diagnostic v4 — ${new Date().toISOString()}`);
+  out(`e-GURO diagnostic v2 — ${new Date().toISOString()}`);
   out(`Site: ${baseUrl}   (values ${showValues ? "SHOWN" : "hidden"})`);
 
   out("\n1) Login page");
@@ -227,85 +185,23 @@ async function main() {
     if (error instanceof LmsAuthError) out("e-GURO rejected the login. Check your username and password in a normal browser first.");
     return;
   }
+
   const pause = () => new Promise((r) => setTimeout(r, 600));
-
-  // 3) Which filter links does the home page offer?
-  out("\n3) Filter links on the home page (short values only)");
-  const home = await safeGet(session, "/app/main_student.php", false);
-  const combos: { text: string; type: string }[] = [];
-  if (home) {
-    const root = parse(home.body);
-    for (const a of root.querySelectorAll("a")) {
-      const href = a.getAttribute("href") ?? "";
-      if (!/course_filter\.php\?/.test(href)) continue;
-      try {
-        const url = new URL(href, `${baseUrl}/app/`);
-        const text = url.searchParams.get("filter_text") ?? "";
-        const type = url.searchParams.get("type_text") ?? "";
-        if (text.length <= 30 && type.length <= 30 && !combos.some((c) => c.text === text && c.type === type)) combos.push({ text, type });
-      } catch {
-        /* ignore odd links */
-      }
-    }
-  }
-  out(JSON.stringify(combos, null, 2));
-  const chosen = combos[0] ?? { text: "ASSIGNED", type: "" };
-  await pause();
-
-  // 4) The filter page: how it sets its filter variables and where its table loads data from.
-  out(`\n4) course_filter.php page (filter_text=${chosen.text}, type_text=${chosen.type})`);
-  const pagePath = `/app/course_filter.php?filter_text=${encodeURIComponent(chosen.text)}&type_text=${encodeURIComponent(chosen.type)}`;
-  const page = await safeGet(session, pagePath, false);
-  const candidates = new Set<string>();
-  if (page) {
-    const scripts = inlineScripts(page.body);
-    out(JSON.stringify({
-      globalFilter: literalValues(scripts, "global_filter"),
-      globalFilterType: literalValues(scripts, "global_filter_type"),
-      baseUrl: literalValues(scripts, "base_url"),
-      tableFieldNames: tableFieldNames(scripts),
-      codeNearTableSetup: codeSnippets(scripts),
-    }, null, 2));
-    for (const script of scripts) {
-      for (const m of script.matchAll(/\b(?:base_url\s*=|ajaxURL\s*:)\s*["']([^"']+\.php[^"']*)["']/g)) candidates.add(m[1]);
-    }
-  }
-  await pause();
-
-  // 5) Ask the table address with the exact pairs the dashboard cards use, plus "ALL", and show what the rows look like.
-  out("\n5) Table data address(es) found in the page code");
-  out(JSON.stringify([...candidates].map((c) => mask(c.replace(/\?.*$/, ""))), null, 2));
-  const tableAddress = [...candidates].map((c) => new URL(c.replace(/\?.*$/, ""), `${baseUrl}/app/`)).find((u) => u.origin === new URL(baseUrl).origin);
-  if (tableAddress) {
-    const pairs = [
-      ["ASSIGNED", "LESSON"], ["ASSIGNED", "EXAM"], ["ASSIGNED", "ALL"], ["DUE_TODAY", "LESSON"],
-      ["DUE_TODAY", "EXAM"], ["MISSED", ""], ["UNREAD", "LESSON"],
-    ];
-    for (const [filter, type] of pairs) {
-      const path = `${tableAddress.pathname}?filter_text=${filter}&filter_type=${encodeURIComponent(type)}&page=1&size=${filter === "UNREAD" ? 5 : 30}`;
-      out(`\nGET ${tableAddress.pathname}  filter_text=${filter}  filter_type=${type === "" ? "(empty)" : type}`);
-      const result = await safeGet(session, path, true);
-      if (result) out(JSON.stringify({ status: result.status, ...describeAny(result.body) }, null, 2));
-      await pause();
-    }
-  }
-
-  // 6) The calendar page loads its events with a POST (action VIEW). Same call the page makes.
-  out("\n6) Calendar events (same request the calendar page makes)");
   const today = new Date();
-  const iso = (d: Date) => `${d.toISOString().slice(0, 10)}T00:00:00+08:00`;
-  try {
-    const cal = await diagnosticPostCalendarView(session, iso(new Date(today.getFullYear(), today.getMonth() - 1, 1)), iso(new Date(today.getFullYear(), today.getMonth() + 3, 0)));
-    out(JSON.stringify({ status: cal.status, contentType: cal.contentType, ...describeAny(cal.body) }, null, 2));
-  } catch (error) {
-    out(`Request failed: ${(error as Error).name}`);
-  }
-  await pause();
+  const iso = (d: Date) => d.toISOString().slice(0, 10);
+  const start = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+  const end = new Date(today.getFullYear(), today.getMonth() + 3, 0);
 
-  // 7) The notifications table (address taken from the first report).
-  out("\n7) Notifications table");
-  const notif = await safeGet(session, "/app/table/notif_table.php?page=1&size=10", true);
-  if (notif) out(JSON.stringify({ status: notif.status, contentType: notif.contentType, ...describeAny(notif.body) }, null, 2));
+  // The student's home page: how classes are linked, what the page script calls.
+  await probe(session, "3) Home page", "/app/main_student.php", false);
+  await pause();
+  // The old prototype's address: it answers with a full page, so look at that page's structure and code.
+  await probe(session, "4) course_filter.php page", "/app/course_filter.php", false);
+  await pause();
+  // Candidates that look like data feeds (a calendar feed usually lists due dates; notif.php looks like notifications).
+  await probe(session, "5) Calendar feed", `/app/calendar_events.php?start=${iso(start)}&end=${iso(end)}`, true);
+  await pause();
+  await probe(session, "6) Notifications", "/app/notif.php", true);
 
   out("\nDone. Nothing was changed on e-GURO (only reads).");
 }

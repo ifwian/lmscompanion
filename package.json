@@ -12,11 +12,7 @@
     "db:deploy": "prisma migrate deploy",
     "db:studio": "prisma studio",
     "postinstall": "prisma generate",
-    "lms:diagnose": "tsx scripts/diagnose-lms.ts",
-    "test:parsers": "tsx scripts/dev/parsers-test.ts",
-    "check": "tsx scripts/run-checker.ts",
-    "email:test": "tsx scripts/test-email.ts",
-    "setup": "tsx scripts/setup.ts"
+    "lms:diagnose": "tsx scripts/diagnose-lms.ts"
   },
   "dependencies": {
     "@fontsource-variable/geist": "^5.3.0",

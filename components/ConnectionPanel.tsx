@@ -9,7 +9,6 @@ function attentionText(connection: LmsConnection): string | null {
     case "DISCONNECTED":
       return "Not connected.";
     case "TEMPORARY_ERROR":
-      if (connection.lastErrorCode === "DATABASE_ERROR") return "The app's database is missing an update. Run: npm run db:deploy, restart the app, then click Check now.";
       return connection.lastErrorCode === "FORMAT_CHANGED"
         ? "e-GURO responded in a way this app does not understand yet. The app's e-GURO code needs an update; see MANUAL_STEPS.md."
         : "e-GURO could not be reached. It will be retried automatically.";

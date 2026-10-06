@@ -38,8 +38,6 @@ model User {
   email             String   @unique // always stored lowercase
   passwordHash      String   @map("password_hash") // bcrypt hash, never the password
   passwordChangedAt DateTime? @map("password_changed_at") // sessions issued before this are rejected
-  termsAcceptedAt   DateTime? @map("terms_accepted_at") // when they agreed to the privacy notice at sign-up
-  emailVerifiedAt   DateTime? @map("email_verified_at") // notification emails are only sent to verified addresses
   createdAt         DateTime @default(now()) @map("created_at")
   updatedAt         DateTime @updatedAt @map("updated_at")
 
@@ -48,7 +46,6 @@ model User {
   courses                 Course[]
   activities              Activity[]
   notifications           Notification[]
-  authTokens              AuthToken[]
 
   @@map("users")
 }
@@ -109,12 +106,6 @@ model Activity {
   description   String?
   url           String?
   dueDate       DateTime?    @map("due_date")
-  postedAt      DateTime?    @map("posted_at") // when e-GURO says the item was posted (from_date)
-  // Current state, refreshed on every check:
-  lmsStatus     String?      @map("lms_status") // ASSIGNED, DUE_TODAY or MISSED while it is pending; null otherwise
-  isUnread      Boolean      @default(false) @map("is_unread") // currently in e-GURO's UNREAD list
-  isMaterial    Boolean      @default(false) @map("is_material") // reading material (a lesson), not work to hand in
-  lastSeenAt    DateTime?    @map("last_seen_at") // last check that still listed it
   detectedAt    DateTime     @default(now()) @map("detected_at")
   createdAt     DateTime     @default(now()) @map("created_at")
 
@@ -124,7 +115,6 @@ model Activity {
 
   @@unique([userId, fingerprint])
   @@index([userId, detectedAt(sort: Desc)])
-  @@index([userId, lmsStatus])
   @@map("activities")
 }
 
@@ -160,20 +150,4 @@ model NotificationPreference {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("notification_preferences")
-}
-
-// One-time links sent by email (confirm address, reset password). Only a hash of the token is stored.
-model AuthToken {
-  id        String    @id @default(uuid())
-  userId    String    @map("user_id")
-  type      String // VERIFY_EMAIL or RESET_PASSWORD
-  tokenHash String    @unique @map("token_hash")
-  expiresAt DateTime  @map("expires_at")
-  usedAt    DateTime? @map("used_at")
-  createdAt DateTime  @default(now()) @map("created_at")
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId, type])
-  @@map("auth_tokens")
 }

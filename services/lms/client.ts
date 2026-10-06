@@ -1,35 +1,29 @@
 // ALL e-GURO network code lives in this file. If e-GURO changes, this is the only file that should need edits.
 //
-// Flow (login confirmed on the real site; the data calls follow what the site's own page code does):
+// Flow (from the old prototype; NOT yet verified against the current site):
 //   1. GET the login page and read its hidden form fields (including token_login_form)
 //   2. POST them with username + password to /app/login.php?formSubmitted=true
-//   3. Keep the cookies, load /app/course_filter.php (lists the student's classes), then ask
-//      /app/table_course.php (JSON) for each filter, exactly like the page's table does
+//   3. Keep the cookies and call /app/course_filter.php (JSON) for each filter/type
 //
 // Politeness rules: honest User-Agent, a timeout on every request, a pause between requests,
 // and a login is attempted ONCE per check (never retried here).
 import { LmsAuthError, LmsFormatError, LmsTemporaryError } from "./errors";
-import { mergeItems, parseActivityPage, parseCoursesFromPage } from "./parsers";
-import type { LmsActivity, LmsCourse, LmsCredentials } from "./types";
+import { parseActivityList } from "./parsers";
+import type { LmsActivity, LmsCredentials } from "./types";
 
 const USER_AGENT = "eGuroCompanion/1.0 (personal notification tool for students)";
 const REQUEST_TIMEOUT_MS = 15_000;
 const PAUSE_BETWEEN_REQUESTS_MS = 300;
 const MAX_REDIRECTS = 5;
 
-// The e-GURO dashboard cards link to these exact filter/type pairs (seen in a real report and screenshot):
-//   "Activity & Quiz" cards = type LESSON, "Assessment" cards = type EXAM, "Missed" covers every type (empty type),
-//   and "Unread" (type LESSON) is the unread lesson material.
-const REQUESTS: { filter: "ASSIGNED" | "DUE_TODAY" | "MISSED" | "UNREAD"; type: string }[] = [
-  { filter: "ASSIGNED", type: "LESSON" },
-  { filter: "ASSIGNED", type: "EXAM" },
-  { filter: "DUE_TODAY", type: "LESSON" },
-  { filter: "DUE_TODAY", type: "EXAM" },
-  { filter: "MISSED", type: "" },
-  { filter: "UNREAD", type: "LESSON" },
-];
-const PAGE_SIZE = 50;
-const MAX_PAGES = 6; // safety limit per list
+// ASSUMPTION (from the old prototype): these are the values course_filter.php understands.
+// Only "new-looking" filters are used to keep the load on the college server small.
+const FILTERS = ["ASSIGNED", "UNREAD"];
+const TYPES = ["LESSON", "ACTIVITY_QUIZ", "ASSESSMENT", "QUESTIONNAIRE", "SUBMIT_ANSWER", "FILE_LESSON", "LINK"];
+
+// Value for the login form's "agents" field (the old prototype sent browser details here).
+// Verify what e-GURO really needs using the Milestone 4 network capture.
+const AGENTS_FIELD_VALUE = JSON.stringify({ name: "eGuroCompanion", version: "1.0" });
 
 export type LmsSession = { baseUrl: string; cookies: Map<string, string> };
 
@@ -120,7 +114,7 @@ export async function getLMSSession(baseUrl: string, credentials: LmsCredentials
   const loginHtml = await loginPage.text();
   const hidden = readHiddenFields(loginHtml);
   if (!hidden.token_login_form) throw new LmsFormatError("Login page has no token_login_form field.");
-  if ("agents" in hidden) hidden.agents = JSON.stringify({ name: "eGuroCompanion", version: "1.0" });
+  if ("agents" in hidden) hidden.agents = AGENTS_FIELD_VALUE;
 
   const form = new URLSearchParams({
     ...hidden,
@@ -138,58 +132,40 @@ export async function getLMSSession(baseUrl: string, credentials: LmsCredentials
   return session;
 }
 
-const FILTER_PAGE = "/app/course_filter.php?filter_text=ASSIGNED&type_text=LESSON";
-
-// The student's classes, read from the filter page (it lists them in a "global_class" variable).
-// This page is also what the real site loads before its table asks for rows, so it is requested first.
-export async function getCourses(session: LmsSession): Promise<LmsCourse[]> {
-  const response = await request(session, FILTER_PAGE, { headers: { Referer: `${session.baseUrl}/app/main_student.php` } });
-  const html = await response.text();
-  if (hasPasswordInput(html)) throw new LmsAuthError("e-GURO session was not accepted.");
-  return parseCoursesFromPage(html);
-}
-
-async function fetchFilter(session: LmsSession, filter: "ASSIGNED" | "DUE_TODAY" | "MISSED" | "UNREAD", type: string): Promise<LmsActivity[]> {
-  const items: LmsActivity[] = [];
-  for (let page = 1; page <= MAX_PAGES; page++) {
-    const path = `/app/table_course.php?filter_text=${encodeURIComponent(filter)}&filter_type=${encodeURIComponent(type)}&page=${page}&size=${PAGE_SIZE}`;
-    const response = await request(session, path, {
-      headers: {
-        "X-Requested-With": "XMLHttpRequest",
-        Accept: "application/json, text/plain, */*",
-        Referer: `${session.baseUrl}${FILTER_PAGE}`,
-      },
-    });
-    const text = await response.text();
-    let json: unknown;
-    try {
-      json = JSON.parse(text);
-    } catch {
-      // HTML instead of JSON: either we got logged out, or the endpoint changed.
-      if (hasPasswordInput(text)) throw new LmsAuthError("e-GURO session was not accepted.");
-      throw new LmsFormatError("Expected JSON from e-GURO but got something else.");
-    }
-    const result = parseActivityPage(json, session.baseUrl, {
-      requestType: type,
-      status: filter === "UNREAD" ? null : filter,
-      unread: filter === "UNREAD",
-    });
-    items.push(...result.items);
-    // last_page was 0 even for lists that had rows, so a full page of rows also means "ask for the next page".
-    if (result.rowCount < PAGE_SIZE && page >= result.lastPage) break;
-    await sleep(PAUSE_BETWEEN_REQUESTS_MS);
+async function fetchActivityList(session: LmsSession, filter: string, lmsType: string): Promise<LmsActivity[]> {
+  const path = `/app/course_filter.php?filter_text=${encodeURIComponent(filter)}&type_text=${encodeURIComponent(lmsType)}`;
+  const response = await request(session, path, {
+    headers: {
+      "X-Requested-With": "XMLHttpRequest",
+      Accept: "application/json, text/plain, */*",
+      Referer: `${session.baseUrl}/app/main_student.php`,
+    },
+  });
+  const text = await response.text();
+  let json: unknown;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    // HTML instead of JSON: either we got logged out, or the endpoint changed.
+    if (hasPasswordInput(text)) throw new LmsAuthError("e-GURO session was not accepted.");
+    throw new LmsFormatError("Expected JSON from e-GURO but got something else.");
   }
-  return items;
+  return parseActivityList(json, lmsType);
 }
 
-// Reads the lists the way the dashboard cards do and combines items that appear in more than one list.
+// Reads every pending item the student can see and removes duplicates across filters.
 export async function getActivities(session: LmsSession): Promise<LmsActivity[]> {
-  const all: LmsActivity[] = [];
-  for (const { filter, type } of REQUESTS) {
-    all.push(...(await fetchFilter(session, filter, type)));
-    await sleep(PAUSE_BETWEEN_REQUESTS_MS);
+  const seen = new Map<string, LmsActivity>();
+  for (const filter of FILTERS) {
+    for (const lmsType of TYPES) {
+      for (const item of await fetchActivityList(session, filter, lmsType)) {
+        const key = `${item.lmsType}:${item.lmsActivityId ?? item.title}`;
+        if (!seen.has(key)) seen.set(key, item);
+      }
+      await sleep(PAUSE_BETWEEN_REQUESTS_MS);
+    }
   }
-  return mergeItems(all);
+  return [...seen.values()];
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -217,19 +193,4 @@ export async function diagnosticLoginPage(baseUrl: string) {
   }));
   const formAction = page.body.match(/<form[^>]*action=["']([^"']*)["']/i)?.[1] ?? null;
   return { status: page.status, fields, formAction };
-}
-
-// Read-only POST for the diagnostic: the calendar page itself asks ajax_cal_event.php with action=VIEW.
-// Only that one address and action are allowed here, so the diagnostic can never change anything.
-export async function diagnosticPostCalendarView(session: LmsSession, start: string, end: string) {
-  const response = await request(session, "/app/ajax_cal_event.php", {
-    method: "POST",
-    body: new URLSearchParams({ start, end, action: "VIEW" }).toString(),
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
-      "X-Requested-With": "XMLHttpRequest",
-      Referer: `${session.baseUrl}/app/calendar_events.php`,
-    },
-  });
-  return { status: response.status, contentType: response.headers.get("content-type") ?? "", body: await response.text() };
 }

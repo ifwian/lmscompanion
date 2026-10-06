@@ -24,12 +24,6 @@ export default async function StatusPage() {
             {report.database.state.toUpperCase()}: {report.database.message}
           </span>
         </li>
-        <li className="row">
-          <span className="label">Database updates</span>
-          <span className="state">
-            {report.updates.state.toUpperCase()}: {report.updates.message}
-          </span>
-        </li>
         {report.env.map((item) => (
           <li className="row" key={item.name}>
             <span className="label">{item.name}</span>
