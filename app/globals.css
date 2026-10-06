@@ -386,16 +386,3 @@ input:focus-visible { outline: none; border-bottom-color: var(--text); box-shado
   .item-large .item-title { font-size: 1.1875rem; }
   .badge { min-width: 4.5rem; }
 }
-
-/* ---------- Sign-up consent, notice banner, privacy page ---------- */
-.check-row { display: grid; grid-template-columns: auto 1fr; gap: 0.75rem; align-items: start; font-family: var(--font-sans); letter-spacing: 0; text-transform: none; color: var(--text); font-size: 0.875rem; line-height: 1.5; cursor: pointer; }
-.check-row input { appearance: none; -webkit-appearance: none; width: 1.25rem; height: 1.25rem; min-height: 0; margin-top: 0.125rem; border: 1px solid var(--border-strong); border-radius: 0; background: transparent; cursor: pointer; display: grid; place-items: center; padding: 0; }
-.check-row input:checked { background: var(--text); border-color: var(--text); }
-.check-row input:checked::after { content: ""; width: 0.375rem; height: 0.625rem; border: solid var(--bg); border-width: 0 2px 2px 0; transform: rotate(45deg) translate(-1px, -1px); }
-.check-row input:focus-visible { outline: 2px solid var(--text); outline-offset: 3px; }
-.banner { border: 1px solid var(--text); padding: 1rem 1.25rem; margin-bottom: 2rem; display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; }
-.banner p { margin: 0; font-size: 0.9375rem; max-width: 40rem; }
-.prose h2 { font-family: var(--font-display); font-size: 1.75rem; line-height: 1.1; margin: 2.25rem 0 0.75rem; }
-.prose p, .prose li { color: var(--muted); max-width: 40rem; }
-.prose li { margin-bottom: 0.5rem; }
-.prose strong, .prose em { color: var(--text); }

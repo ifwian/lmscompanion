@@ -22,7 +22,7 @@ export async function sendPendingEmails(userId?: string): Promise<EmailRunResult
     },
     include: {
       activity: { include: { course: true } },
-      user: { select: { email: true, emailVerifiedAt: true, notificationPreferences: true } },
+      user: { select: { email: true, notificationPreferences: true } },
     },
     orderBy: { createdAt: "asc" },
     take: 100,
@@ -41,7 +41,6 @@ export async function sendPendingEmails(userId?: string): Promise<EmailRunResult
       continue;
     }
     if (!isEmailConfigured()) continue; // leave it PENDING until email is configured
-    if (!note.user.emailVerifiedAt) continue; // never email an address that has not been confirmed (it stays pending)
 
     // Claim it: only one runner can move this exact (status, attempts) pair forward.
     const claimed = await db.notification.updateMany({

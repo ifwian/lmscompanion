@@ -18,10 +18,9 @@ function check(name, condition, detail = "") {
 
 // --- SMTP sink: collects every email the app sends ---
 const mails = [];
-const authMails = []; // confirm-email and reset-password emails
 const smtp = new SMTPServer({
   authOptional: true, disabledCommands: ["STARTTLS"],
-  onData(stream, _s, cb) { let raw = ""; stream.on("data", (c) => (raw += c)); stream.on("end", () => { (/Subject: \[ e-GURO \] (Confirm your email|Reset your password)/.test(raw) ? authMails : mails).push(raw); cb(); }); },
+  onData(stream, _s, cb) { let raw = ""; stream.on("data", (c) => (raw += c)); stream.on("end", () => { mails.push(raw); cb(); }); },
 });
 await new Promise((r) => smtp.listen(2525, r));
 await startMockLms(4000);
@@ -53,23 +52,13 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // Mail bodies arrive quoted-printable encoded; undo that so we can search them.
 const decodeMail = (raw) => raw.replace(/=\r?\n/g, "").replace(/=3D/g, "=");
-const REG = { inviteCode: "class-2026", acceptTerms: true };
-async function confirmEmail(email, which = "latest") {
-  await sleep(500);
-  const found = authMails.filter((m) => m.includes(`To: ${email}`) && /Confirm your email/.test(m));
-  const raw = which === "first" ? found[0] : found[found.length - 1];
-  const token = /verify-email\?token=([0-9a-f]{64})/.exec(decodeMail(raw ?? ""))?.[1];
-  return (await client().call("/api/auth/verify", { method: "POST", body: { token } })).status;
-}
 const stamp = Date.now();
 const emailA = `student.a.${stamp}@example.com`, emailB = `student.b.${stamp}@example.com`;
 const A = client(), B = client();
 
 console.log("\n1. Accounts and access control");
-check("register A", (await A.call("/api/auth/register", { method: "POST", body: { ...REG, name: "Student A", email: emailA, password: "password-aaaa-1" } })).status === 201);
-check("register B", (await B.call("/api/auth/register", { method: "POST", body: { ...REG, name: "Student B", email: emailB, password: "password-bbbb-1" } })).status === 201);
-check("A confirms the email address from the emailed link", (await confirmEmail(emailA)) === 200);
-check("B confirms the email address from the emailed link", (await confirmEmail(emailB)) === 200);
+check("register A", (await A.call("/api/auth/register", { method: "POST", body: { name: "Student A", email: emailA, password: "password-aaaa-1" } })).status === 201);
+check("register B", (await B.call("/api/auth/register", { method: "POST", body: { name: "Student B", email: emailB, password: "password-bbbb-1" } })).status === 201);
 check("API without login -> 401", (await client().call("/api/notifications/read-all", { method: "POST" })).status === 401);
 check("page without login -> redirect", (await client().call("/activities")).status === 307);
 check("cron without secret -> 401", (await cron(null)).status === 401);
@@ -207,8 +196,7 @@ check("after logout API is 401", (await A.call("/api/notifications/read-all", { 
 console.log("\n12. Pending vs unread sections, lessons, handed-in items");
 const emailC = `student.c.${stamp}@example.com`;
 const C = client();
-await C.call("/api/auth/register", { method: "POST", body: { ...REG, name: "Student C", email: emailC, password: "password-cccc-1" } });
-check("C confirms the email address", (await confirmEmail(emailC)) === 200);
+await C.call("/api/auth/register", { method: "POST", body: { name: "Student C", email: emailC, password: "password-cccc-1" } });
 await admin({ addAccount: { username: "studentC", password: "lms-pass-C", courses: [{ teacher_class_id: 30001, class_name: "1-MA1", subject_code: "MATH 101", subject_text: "Calculus" }] } });
 check("C connects", (await C.call("/api/lms/connect", { method: "POST", body: { username: "studentC", password: "lms-pass-C" } })).status === 200);
 await admin({ addItems: { username: "studentC", items: [
@@ -249,71 +237,6 @@ const x2 = await rowOf("C-Pending-X"), y2 = await rowOf("C-Unread-Lesson-1");
 check("handed-in item is no longer pending (kept in history)", x2 && x2.s === null && x2.u === false);
 check("opened lesson is no longer unread", y2 && y2.u === false);
 check("no extra emails for state changes", mailsC().length === 1);
-
-console.log("\n13. Classmate-ready accounts: invite code, consent, email confirmation, password reset, delete account");
-const bad = (b) => client().call("/api/auth/register", { method: "POST", body: b });
-check("sign-up without the invite code is refused (403)", (await bad({ acceptTerms: true, name: "X", email: `x1.${stamp}@example.com`, password: "password-xxxx-1" })).status === 403);
-check("sign-up with a wrong invite code is refused (403)", (await bad({ ...REG, inviteCode: "nope", name: "X", email: `x2.${stamp}@example.com`, password: "password-xxxx-1" })).status === 403);
-check("sign-up without agreeing to the privacy notice is refused (400)", (await bad({ inviteCode: "class-2026", name: "X", email: `x3.${stamp}@example.com`, password: "password-xxxx-1" })).status === 400);
-check("no account was created by the refused attempts", (await one(`SELECT count(*)::int c FROM users WHERE email LIKE 'x_.${stamp}@%'`)).c === 0);
-const privacy = await client().call("/privacy");
-check("privacy page is public and honest about encryption", privacy.status === 200 && privacy.text.includes("encrypted"));
-
-const emailD = `student.d.${stamp}@example.com`;
-const D = client();
-check("D signs up (201)", (await D.call("/api/auth/register", { method: "POST", body: { ...REG, name: "Student D", email: emailD, password: "password-dddd-1" } })).status === 201);
-const du = `(SELECT id FROM users WHERE email='${emailD}')`;
-check("D's terms acceptance is recorded and the address is not confirmed yet", await (async () => { const r = await one(`SELECT terms_accepted_at t, email_verified_at v FROM users WHERE id=${du}`); return r.t !== null && r.v === null; })());
-await sleep(500);
-check("a confirmation email was sent to D", authMails.some((m) => m.includes(`To: ${emailD}`) && /Confirm your email/.test(m)));
-check("dashboard asks D to confirm the address", (await D.call("/dashboard")).text.includes("Confirm your email address"));
-await admin({ addAccount: { username: "studentD", password: "lms-pass-D", courses: [{ teacher_class_id: 40001, class_name: "1-EN1", subject_code: "ENG 101", subject_text: "Communication" }] } });
-await admin({ addItem: { username: "studentD", item: { lmsType: "LESSON", id: 8001, title: "D-Base", submit: "1", lists: ["ASSIGNED"] } } });
-await D.call("/api/lms/connect", { method: "POST", body: { username: "studentD", password: "lms-pass-D" } });
-await makeDue(emailD); await cron();
-await admin({ addItem: { username: "studentD", item: { lmsType: "LESSON", id: 8002, title: "D-New-Pending", submit: "1", lists: ["ASSIGNED"] } } });
-await makeDue(emailD); await cron(); await sleep(400);
-check("a new item makes a notification for D", (await one(`SELECT count(*)::int c FROM notifications WHERE user_id=${du}`)).c === 1);
-check("but NO email goes to an unconfirmed address (stays pending)", (await one(`SELECT email_status s FROM notifications WHERE user_id=${du}`)).s === "PENDING" && !mails.some((m) => m.includes(`To: ${emailD}`)));
-check("test email is refused until the address is confirmed (403)", (await D.call("/api/settings/test-email", { method: "POST" })).status === 403);
-const resend = await D.call("/api/auth/resend-verification", { method: "POST" });
-check("D can ask for a new confirmation email", resend.status === 200);
-check("the OLD confirmation link no longer works once a new one was sent", (await confirmEmail(emailD, "first")) === 400);
-check("the NEW confirmation link works", (await confirmEmail(emailD, "latest")) === 200);
-check("the same link cannot be used twice", (await confirmEmail(emailD, "latest")) === 400);
-await makeDue(emailD); await cron(); await sleep(500);
-check("after confirming, the waiting email is sent to D", mails.some((m) => m.includes(`To: ${emailD}`) && decodeMail(m).includes("D-New-Pending")) && (await one(`SELECT email_status s FROM notifications WHERE user_id=${du}`)).s === "SENT");
-
-const authCount = (email) => authMails.filter((m) => m.includes(`To: ${email}`) && /Reset your password/.test(m)).length;
-const unknown = await client().call("/api/auth/forgot", { method: "POST", body: { email: `nobody.${stamp}@example.com` } });
-check("forgot-password gives the same answer for an unknown email", unknown.status === 200 && /If that email has an account/.test(unknown.json?.message ?? ""));
-const known = await client().call("/api/auth/forgot", { method: "POST", body: { email: emailD } });
-await sleep(500);
-check("forgot-password for D sends exactly one reset email", known.status === 200 && authCount(emailD) === 1 && authCount(`nobody.${stamp}@example.com`) === 0);
-const resetToken = /reset-password\?token=([0-9a-f]{64})/.exec(decodeMail(authMails.filter((m) => m.includes(`To: ${emailD}`) && /Reset your password/.test(m))[0]))?.[1];
-check("a too-short new password is refused and the link stays usable", (await client().call("/api/auth/reset", { method: "POST", body: { token: resetToken, newPassword: "short" } })).status === 400);
-check("a made-up reset link is refused", (await client().call("/api/auth/reset", { method: "POST", body: { token: "0".repeat(64), newPassword: "password-new-dddd-2" } })).status === 400);
-const oldSessionD = D.cookie;
-await sleep(1100);
-check("the reset link sets a new password", (await client().call("/api/auth/reset", { method: "POST", body: { token: resetToken, newPassword: "password-new-dddd-2" } })).status === 200);
-check("the reset link works only once", (await client().call("/api/auth/reset", { method: "POST", body: { token: resetToken, newPassword: "password-new-dddd-3" } })).status === 400);
-check("old password no longer logs in", (await client().call("/api/auth/login", { method: "POST", body: { email: emailD, password: "password-dddd-1" } })).status === 401);
-const D2 = client();
-check("new password logs in", (await D2.call("/api/auth/login", { method: "POST", body: { email: emailD, password: "password-new-dddd-2" } })).status === 200);
-check("an older session is signed out by the reset", (await fetch(`${APP}/dashboard`, { headers: { Cookie: oldSessionD }, redirect: "manual" })).status === 307);
-
-const noAuth = await fetch(`${APP}/api/admin/summary`);
-check("owner summary is closed without the secret (401)", noAuth.status === 401);
-const summaryRes = await fetch(`${APP}/api/admin/summary`, { headers: { Authorization: `Bearer ${CRON_SECRET}` } });
-const summaryText = await summaryRes.text();
-check("owner summary shows counts only (no emails or usernames)", summaryRes.status === 200 && JSON.parse(summaryText).users >= 4 && !/@example\.com|student[A-D]/i.test(summaryText), summaryText.slice(0, 200));
-
-check("delete account with a wrong password is refused (400)", (await D2.call("/api/settings/delete-account", { method: "POST", body: { password: "not-my-password" } })).status === 400);
-check("delete account with the right password works", (await D2.call("/api/settings/delete-account", { method: "POST", body: { password: "password-new-dddd-2" } })).status === 200);
-const gone = await one(`SELECT (SELECT count(*)::int FROM users WHERE email='${emailD}') u, (SELECT count(*)::int FROM lms_connections WHERE lms_username='studentD') c, (SELECT count(*)::int FROM activities WHERE title LIKE 'D-%') a, (SELECT count(*)::int FROM notifications n JOIN activities a ON a.id=n.activity_id WHERE a.title LIKE 'D-%') n, (SELECT count(*)::int FROM auth_tokens t WHERE NOT EXISTS (SELECT 1 FROM users u WHERE u.id=t.user_id)) t`);
-check("everything stored about D is gone (user, e-GURO password, activities, notifications, tokens)", gone.u === 0 && gone.c === 0 && gone.a === 0 && gone.n === 0 && gone.t === 0, JSON.stringify(gone));
-check("a deleted account cannot log in", (await client().call("/api/auth/login", { method: "POST", body: { email: emailD, password: "password-new-dddd-2" } })).status === 401);
-check("other students are untouched by the deletion", (await one(`SELECT count(*)::int c FROM users WHERE email IN ('${emailA}','${emailB}','${emailC}')`)).c === 3);
 
 console.log(`\nResult: ${passed} passed, ${failed} failed`);
 await db.end(); smtp.close();

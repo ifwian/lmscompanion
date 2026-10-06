@@ -5,7 +5,7 @@ import { config } from "@/lib/config";
 import { sendPendingEmails } from "@/services/email/send";
 import { syncUserLms } from "./sync-user";
 
-const MAX_RUN_MS = (Number.parseInt(process.env.MAX_RUN_SECONDS ?? "", 10) || 240) * 1000; // Vercel Hobby allows up to 300 s
+const MAX_RUN_MS = (Number.parseInt(process.env.MAX_RUN_SECONDS ?? "", 10) || 50) * 1000;
 const STALE_CHECKING_MS = 10 * 60 * 1000;
 
 export type CheckerSummary = { due: number; checked: number; ok: number; failed: number; skipped: number; emailsSent: number };
@@ -41,29 +41,22 @@ export async function runChecker(): Promise<CheckerSummary> {
   });
   summary.due = due.length;
 
-  // A few students at a time (CHECK_CONCURRENCY, default 3), with a short pause between groups.
-  // One student's failure never stops the others: each is wrapped in its own try/catch.
-  const group = config.checkConcurrency();
-  for (let i = 0; i < due.length; i += group) {
+  for (const row of due) {
     if (Date.now() - started > MAX_RUN_MS) break; // leave the rest for the next run
-    await Promise.all(
-      due.slice(i, i + group).map(async (row) => {
-        try {
-          const outcome = await syncUserLms(row.userId);
-          if (outcome.ok) {
-            summary.ok += 1;
-            summary.emailsSent += outcome.emailsSent;
-          } else if (outcome.skipped) {
-            summary.skipped += 1;
-          } else {
-            summary.failed += 1;
-          }
-          if (!("skipped" in outcome && outcome.skipped)) summary.checked += 1;
-        } catch {
-          summary.failed += 1; // unexpected error: count it, keep going
-        }
-      }),
-    );
+    try {
+      const outcome = await syncUserLms(row.userId);
+      if (outcome.ok) {
+        summary.ok += 1;
+        summary.emailsSent += outcome.emailsSent;
+      } else if (outcome.skipped) {
+        summary.skipped += 1;
+      } else {
+        summary.failed += 1;
+      }
+      if (!("skipped" in outcome && outcome.skipped)) summary.checked += 1;
+    } catch {
+      summary.failed += 1; // unexpected error: count it, keep going
+    }
     await sleep(config.delayBetweenUsersMs());
   }
 

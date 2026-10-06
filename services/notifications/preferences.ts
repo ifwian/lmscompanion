@@ -1,4 +1,4 @@
-import type { ActivityType, NotificationPreference } from "@/generated/prisma/client";
+import type { ActivityType, NotificationPreference } from "../../generated/prisma/client";
 
 // Maps an activity type to the matching on/off switch in the student's settings.
 export function isTypeEnabled(prefs: NotificationPreference | null, type: ActivityType): boolean {

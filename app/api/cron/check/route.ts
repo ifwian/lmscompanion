@@ -2,7 +2,7 @@ import { timingSafeEqual } from "node:crypto";
 import { runChecker } from "@/services/checker/run";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 300; // seconds (Vercel Hobby maximum). The checker also stops itself after ~240s.
+export const maxDuration = 60; // seconds (Vercel). The checker also stops itself after ~50s.
 
 function authorized(request: Request): boolean {
   const secret = process.env.CRON_SECRET;

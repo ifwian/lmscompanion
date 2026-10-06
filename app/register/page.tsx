@@ -2,7 +2,6 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import AuthForm from "@/components/AuthForm";
 import { getCurrentUser } from "@/lib/auth/session";
-import { config } from "@/lib/config";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Create account · e-GURO Companion" };
@@ -18,7 +17,7 @@ export default async function RegisterPage() {
       </aside>
       <main className="auth-main reveal">
         <h1>Create your account</h1>
-        <AuthForm mode="register" inviteRequired={Boolean(config.inviteCode())} />
+        <AuthForm mode="register" />
       </main>
     </div>
   );
