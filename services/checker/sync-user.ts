@@ -6,6 +6,7 @@ import { decryptSecret } from "@/lib/crypto";
 import { connect, getActivities, getAnnouncements, getCourses, LmsAuthError } from "@/services/lms";
 import { detectAndSave } from "@/services/notifications/detect";
 import { sendPendingEmails } from "@/services/email/send";
+import { logError } from "@/lib/log";
 
 const STALE_CHECKING_MS = 10 * 60 * 1000; // a CHECKING state older than this is treated as a crashed run
 const MAX_BACKOFF_MS = 6 * 60 * 60 * 1000;
@@ -25,6 +26,7 @@ export async function syncUserLms(userId: string): Promise<SyncOutcome> {
   const claim = await db.lmsConnection.updateMany({
     where: {
       id: connection.id,
+      userId,
       OR: [{ status: { not: "CHECKING" } }, { checkingStartedAt: { lt: new Date(now.getTime() - STALE_CHECKING_MS) } }],
     },
     data: { status: "CHECKING", checkingStartedAt: now },
@@ -57,7 +59,7 @@ export async function syncUserLms(userId: string): Promise<SyncOutcome> {
     const emails = await sendPendingEmails(userId);
 
     await db.lmsConnection.update({
-      where: { id: connection.id },
+      where: { id: connection.id, userId },
       data: {
         status: "CONNECTED",
         lastErrorCode: null,
@@ -90,11 +92,13 @@ export async function syncUserLms(userId: string): Promise<SyncOutcome> {
     // Stored credentials we cannot decrypt (for example the key changed) need a reconnect too.
     const unreadable = code === "INTERNAL" && /encrypted|ENCRYPTION_KEY|Unsupported|auth/i.test(String((error as Error)?.message));
     const needsReconnect = isAuth || unreadable;
+    // A wrong e-GURO password is the student's to fix. Everything else is worth the owner knowing about.
+    if (!isAuth) await logError("checker", error, { code: isDatabase ? "DATABASE_ERROR" : code });
     const failures = connection.consecutiveFailures + 1;
     const backoff = Math.min(interval * 2 ** Math.min(failures, 8), MAX_BACKOFF_MS);
 
     await db.lmsConnection.update({
-      where: { id: connection.id },
+      where: { id: connection.id, userId },
       data: {
         status: needsReconnect ? "AUTH_ERROR" : "TEMPORARY_ERROR",
         lastErrorCode: needsReconnect && !isAuth ? "CREDENTIALS_UNREADABLE" : code,

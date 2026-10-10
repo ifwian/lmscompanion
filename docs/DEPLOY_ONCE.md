@@ -25,6 +25,13 @@ Push the project to a GitHub repository. `.env` is ignored by Git (check `git st
 
 Keep `ENCRYPTION_KEY` backed up somewhere private. If you lose it, everyone must reconnect e-GURO.
 
+## 2b. Production settings (new)
+- **Pooled database address:** in Neon, copy the connection string with "Pooled connection" ticked (the host has `-pooler`) and use it as `DATABASE_URL` in Vercel. Also add `DIRECT_URL` with the non-pooled string. The build uses it to apply new database migrations by itself on every production deploy, so you no longer run `npm run db:deploy` by hand.
+- **Region:** Vercel project > Settings > Functions > pick the region closest to your Neon database.
+- **CI:** the file `.github/workflows/ci.yml` runs the checks on every change. In GitHub > Settings > Branches, add a rule for `main` with "Require status checks to pass" (CI). Work on a branch and merge through a pull request.
+- **Uptime alerts:** make a free UptimeRobot account and add an HTTP monitor for `https://YOUR-SITE/api/health?strict=1` every 5 minutes. It emails you if the database is down, a setting is missing, or the checker stopped.
+- **Backup:** run `npm run backup` now. Keep the file and `ENCRYPTION_KEY` in two different places. See `docs/RUNBOOK.md`.
+
 ## 3. Scheduler (this is what checks e-GURO for everyone)
 Pick ONE:
 

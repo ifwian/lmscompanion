@@ -116,8 +116,17 @@ export function mergeItems(items: LmsActivity[]): LmsActivity[] {
 
 // Finds "var global_class = [ ... ];" in the filter page and reads the student's classes from it.
 // Returns an empty list (not an error) when the page does not contain it.
+const CLASS_LIST_MARKER = /\bglobal_class\s*=\s*/;
+
+// True when the page still carries the block e-GURO uses to list classes. Its absence is a different
+// situation from "the student simply has no classes": the marker is there, the list behind it is empty.
+// Callers use this to tell a changed page apart from an empty one instead of silently saving nothing.
+export function hasClassListMarker(html: string): boolean {
+  return CLASS_LIST_MARKER.test(html);
+}
+
 export function parseCoursesFromPage(html: string): LmsCourse[] {
-  const marker = /\bglobal_class\s*=\s*/.exec(html);
+  const marker = CLASS_LIST_MARKER.exec(html);
   if (!marker) return [];
   const start = marker.index + marker[0].length;
   if (html[start] !== "[") return [];

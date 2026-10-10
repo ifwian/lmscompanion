@@ -1,8 +1,9 @@
 import { timingSafeEqual } from "node:crypto";
+import { logError } from "@/lib/log";
 import { runChecker } from "@/services/checker/run";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 60; // seconds (Vercel). The checker also stops itself after ~50s.
+export const maxDuration = 300; // seconds (Vercel Hobby maximum). The checker also stops itself after ~240s.
 
 function authorized(request: Request): boolean {
   const secret = process.env.CRON_SECRET;
@@ -16,8 +17,13 @@ function authorized(request: Request): boolean {
 
 async function handle(request: Request) {
   if (!authorized(request)) return Response.json({ error: "Unauthorized." }, { status: 401 });
-  const summary = await runChecker();
-  return Response.json({ ok: true, summary });
+  try {
+    const summary = await runChecker();
+    return Response.json({ ok: true, summary });
+  } catch (error) {
+    await logError("cron", error);
+    return Response.json({ ok: false, error: "The checker failed. See the error log." }, { status: 500 });
+  }
 }
 
 export const GET = handle;

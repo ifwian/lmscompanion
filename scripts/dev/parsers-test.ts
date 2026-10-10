@@ -1,5 +1,5 @@
 // Quick checks of the e-GURO parsers with data shaped like the real reports. Run: npx tsx scripts/dev/parsers-test.ts
-import { mergeItems, parseActivityPage, parseCoursesFromPage, parseLmsDate } from "../../services/lms/parsers";
+import { mergeItems, parseActivityPage, parseCoursesFromPage, parseLmsDate, hasClassListMarker } from "../../services/lms/parsers";
 
 let failed = 0;
 function check(name: string, ok: boolean) {
@@ -16,6 +16,9 @@ check("course code and name", courses[0].courseCode === "CS 201" && courses[0].c
 check("string ids work", courses[1].lmsCourseId === "19197");
 check("page without classes -> empty list", parseCoursesFromPage("<html></html>").length === 0);
 check("broken JSON -> empty list, no crash", parseCoursesFromPage("var global_class = [{oops").length === 0);
+// The marker separates "e-GURO changed this page" from "this student has no classes", so the checker can alert.
+check("class-list marker found on a real filter page", hasClassListMarker(page));
+check("class-list marker missing when the page changed", !hasClassListMarker("<html><body>Login required</body></html>"));
 
 const result = parseActivityPage({ last_page: "2", total_record: 3, data: [
   { class_exam_id: 55, teacher_class_id: 19196, title: "  Quiz 1  ", mark_type: "exam", term: 2, from_date: "2026-10-01 08:00:00", to_date: "2026-10-09 23:59:00" },

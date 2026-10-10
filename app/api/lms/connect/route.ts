@@ -15,7 +15,7 @@ export async function POST(request: Request) {
   const { user } = auth;
 
   // At most 3 attempts per hour per student, so a typo-loop cannot lock them out of e-GURO.
-  if (isRateLimited(`lms-connect:${user.id}`, 3, 60 * 60 * 1000)) {
+  if (await isRateLimited(`lms-connect:${user.id}`, 3, 60 * 60 * 1000)) {
     return jsonError("Too many connection attempts. Wait a while before trying again.", 429);
   }
 

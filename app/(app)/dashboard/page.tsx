@@ -5,7 +5,10 @@ import { getCurrentUser } from "@/lib/auth/session";
 import ActionButton from "@/components/ActionButton";
 import ActivityRow from "@/components/ActivityRow";
 import ConnectionPanel from "@/components/ConnectionPanel";
-import { greeting, sortPending } from "@/lib/ui/format";
+import NewNoteButton from "@/components/NewNoteButton";
+import OnboardingChecklist from "@/components/OnboardingChecklist";
+import { isOnboardingComplete, onboardingSteps } from "@/lib/onboarding";
+import { greeting, sortPending, timeAgo } from "@/lib/ui/format";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Overview · e-GURO Companion" };
@@ -17,7 +20,7 @@ export default async function DashboardPage() {
 
   // Every query below filters by userId.
   const include = { course: true, notification: { select: { readAt: true } } } as const;
-  const [connection, newAlerts, courseCount, pendingRaw, unreadCount, unreadLessons] = await Promise.all([
+  const [connection, newAlerts, courseCount, pendingRaw, unreadCount, unreadLessons, recentNotes, activityNotes] = await Promise.all([
     db.lmsConnection.findUnique({ where: { userId: user.id } }),
     db.notification.count({ where: { userId: user.id, readAt: null } }),
     db.course.count({ where: { userId: user.id } }),
@@ -29,9 +32,15 @@ export default async function DashboardPage() {
       take: 6,
       include,
     }),
+    db.note.findMany({ where: { userId: user.id }, orderBy: [{ pinned: "desc" }, { updatedAt: "desc" }], take: 4, include: { course: true } }),
+    db.note.findMany({ where: { userId: user.id, activityId: { not: null } }, select: { id: true, activityId: true } }),
   ]);
+  const noteByActivity = new Map(activityNotes.map((n) => [n.activityId, n.id]));
   const pending = sortPending(pendingRaw);
   const checkedOnce = Boolean(connection?.baselineDone);
+  // Built from the rows already loaded above (user.emailVerifiedAt and the user's own connection), so it adds no queries.
+  const onboarding = onboardingSteps({ emailVerifiedAt: user.emailVerifiedAt, connection });
+  const showOnboarding = !isOnboardingComplete(onboarding);
   const firstName = user.name.split(" ")[0];
   const canCheck = connection && connection.encryptedPassword && connection.status !== "AUTH_ERROR";
   const courseLabel = (a: (typeof pending)[number]) => (a.course ? [a.course.courseCode, a.course.courseName].filter(Boolean).join(" ") : null);
@@ -40,6 +49,8 @@ export default async function DashboardPage() {
     <>
       <p className="eyebrow">Overview</p>
       <h1 className="page-title">{greeting()}, <em>{firstName}.</em></h1>
+
+      {showOnboarding && <OnboardingChecklist steps={onboarding} />}
 
       <section aria-label="Summary" className="stats stats-4">
         <div className="stat"><p className="stat-number">{String(pending.length).padStart(2, "0")}</p><p className="label">Pending</p></div>
@@ -72,7 +83,7 @@ export default async function DashboardPage() {
         ) : (
           <ul className="list">
             {pending.map((a) => (
-              <ActivityRow key={a.id} large type={a.type} lmsType={a.lmsType} isMaterial={a.isMaterial} title={a.title} courseLabel={courseLabel(a)}
+              <ActivityRow key={a.id} activityId={a.id} noteId={noteByActivity.get(a.id) ?? null} large type={a.type} lmsType={a.lmsType} isMaterial={a.isMaterial} title={a.title} courseLabel={courseLabel(a)}
                 detectedAt={a.detectedAt} postedAt={a.postedAt} dueDate={a.dueDate} url={a.url} status={a.lmsStatus} isUnread={a.isUnread}
                 isNew={a.notification ? a.notification.readAt === null : false} />
             ))}
@@ -95,7 +106,7 @@ export default async function DashboardPage() {
             <>
               <ul className="list">
                 {unreadLessons.map((a) => (
-                  <ActivityRow key={a.id} type={a.type} lmsType={a.lmsType} isMaterial={a.isMaterial} title={a.title} courseLabel={courseLabel(a)}
+                  <ActivityRow key={a.id} activityId={a.id} noteId={noteByActivity.get(a.id) ?? null} type={a.type} lmsType={a.lmsType} isMaterial={a.isMaterial} title={a.title} courseLabel={courseLabel(a)}
                     detectedAt={a.detectedAt} postedAt={a.postedAt} dueDate={a.dueDate} url={a.url} status={a.lmsStatus} isUnread={a.isUnread}
                     isNew={a.notification ? a.notification.readAt === null : false} />
                 ))}
@@ -114,6 +125,33 @@ export default async function DashboardPage() {
           {canCheck && <ActionButton url="/api/lms/check-now" label="Check now" busyLabel="Checking…" />}
         </aside>
       </div>
+
+      <section className="section-notes" aria-labelledby="notes-title">
+        <div className="pending-head">
+          <div className="section-head"><span className="idx">03</span><h2 id="notes-title" className="label">Your notes</h2></div>
+          <NewNoteButton small label="New note" />
+        </div>
+        {recentNotes.length === 0 ? (
+          <div className="empty">
+            <p className="empty-title">No notes yet</p>
+            <p className="hint">Jot down lecture notes or reminders. Use &quot;+ Note&quot; on a pending item to write about it.</p>
+          </div>
+        ) : (
+          <ul className="list">
+            {recentNotes.map((n) => (
+              <li className="item" key={n.id}>
+                <span className={n.pinned ? "badge badge-assigned" : "badge"}>{n.pinned ? "Pinned" : "Note"}</span>
+                <div className="item-main">
+                  <p className="item-meta">{n.course ? [n.course.courseCode, n.course.courseName].filter(Boolean).join(" ") : "No course"}</p>
+                  <p className="item-title"><Link href={`/notes/${n.id}`}>{n.title}</Link></p>
+                  <p className="item-meta">Updated {timeAgo(n.updatedAt)}</p>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+        <p className="hint" style={{ marginTop: "1rem" }}><Link href="/notes">All notes →</Link></p>
+      </section>
     </>
   );
 }

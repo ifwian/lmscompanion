@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
   if (!isSameOrigin(request)) return Response.json({ error: "Request blocked." }, { status: 403 });
-  if (isRateLimited(`reset:${clientKey(request)}`, 30, 15 * 60 * 1000)) {
+  if (await isRateLimited(`reset:${clientKey(request)}`, 30, 15 * 60 * 1000)) {
     return Response.json({ error: "Too many attempts. Try again in a few minutes." }, { status: 429 });
   }
   const body = (await request.json().catch(() => null)) as { token?: unknown; newPassword?: unknown } | null;

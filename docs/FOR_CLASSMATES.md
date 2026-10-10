@@ -8,6 +8,9 @@ It checks your e-GURO about every 15 minutes and emails you when something NEW t
 4. **Settings > Connect e-GURO**: enter your e-GURO username and password. It tries ONE login to check them.
 5. Click **Check now** on Overview. The first check only saves what you already have, so no emails for old items. After that you get an email for each new item.
 
+## Notes
+Use **Notes** in the menu to write lecture notes, reminders and study guides. They autosave, support Markdown (headings, lists, to-do boxes), and you can link a note to a course or press **+ Note** on any e-GURO item. You can download all your notes from the Notes page. Notes are private to your account but are not encrypted, so do not put passwords in them.
+
 ## Good to know
 - Your e-GURO password is stored **encrypted** so the app can check while you sleep. The person running this site can see your name, email and items, but not your e-GURO password without the server key. Read `/privacy` and decide.
 - It only **reads**. It never submits, changes or deletes anything in e-GURO.

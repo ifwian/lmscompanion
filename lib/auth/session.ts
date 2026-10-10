@@ -66,7 +66,7 @@ export async function getCurrentUser() {
   if (!session) return null;
   const user = await getDb().user.findUnique({
     where: { id: session.userId },
-    select: { id: true, name: true, email: true, emailVerifiedAt: true, passwordChangedAt: true }, // never select passwordHash here
+    select: { id: true, name: true, email: true, passwordChangedAt: true, emailVerifiedAt: true }, // never select passwordHash here
   });
   if (!user) return null;
   // Changing the password invalidates every older session (including a stolen one).

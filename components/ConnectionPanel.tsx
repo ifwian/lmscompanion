@@ -33,7 +33,7 @@ export default function ConnectionPanel({ connection }: { connection: LmsConnect
   return (
     <section className="panel" aria-labelledby="conn-title">
       <h2 id="conn-title" className="label">LMS connection</h2>
-      <p className="state-line"><span className={`dot dot-${connection.status}`} aria-hidden="true" />{STATUS_LABEL[connection.status as keyof typeof STATUS_LABEL]}</p>
+      <p className="state-line"><span className={`dot dot-${connection.status}`} aria-hidden="true" />{STATUS_LABEL[connection.status]}</p>
       {attention && <p className="hint">{attention}</p>}
       <dl className="meta-list">
         <div><dt>Last checked</dt><dd>{timeAgo(connection.lastCheckedAt)}</dd></div>

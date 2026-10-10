@@ -15,5 +15,5 @@ export async function proxy(request: NextRequest) {
 
 // Add new protected sections here (courses, activities, etc. in later milestones).
 export const config = {
-  matcher: ["/dashboard/:path*", "/courses/:path*", "/activities/:path*", "/notifications/:path*", "/settings/:path*"],
+  matcher: ["/dashboard/:path*", "/courses/:path*", "/activities/:path*", "/notes/:path*", "/notifications/:path*", "/settings/:path*"],
 };

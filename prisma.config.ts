@@ -6,5 +6,6 @@ import { defineConfig } from "prisma/config";
 export default defineConfig({
   schema: "prisma/schema.prisma",
   migrations: { path: "prisma/migrations" },
-  datasource: { url: process.env.DATABASE_URL ?? "" },
+  // Migrations should use a DIRECT database address (Neon: the one without "-pooler"). The app itself uses DATABASE_URL.
+  datasource: { url: process.env.DIRECT_URL || process.env.DATABASE_URL || "" },
 });

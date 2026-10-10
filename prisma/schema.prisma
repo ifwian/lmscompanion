@@ -36,10 +36,10 @@ model User {
   id                String   @id @default(uuid())
   name              String
   email             String   @unique // always stored lowercase
-  emailVerifiedAt   DateTime? @map("email_verified_at") // null until email is verified
-  termsAcceptedAt   DateTime? @map("terms_accepted_at") // when the user accepted the terms
   passwordHash      String   @map("password_hash") // bcrypt hash, never the password
   passwordChangedAt DateTime? @map("password_changed_at") // sessions issued before this are rejected
+  termsAcceptedAt   DateTime? @map("terms_accepted_at") // when they agreed to the privacy notice at sign-up
+  emailVerifiedAt   DateTime? @map("email_verified_at") // notification emails are only sent to verified addresses
   createdAt         DateTime @default(now()) @map("created_at")
   updatedAt         DateTime @updatedAt @map("updated_at")
 
@@ -49,6 +49,7 @@ model User {
   activities              Activity[]
   notifications           Notification[]
   authTokens              AuthToken[]
+  notes                   Note[]
 
   @@map("users")
 }
@@ -89,6 +90,7 @@ model Course {
 
   user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   activities Activity[]
+  notes      Note[]
 
   @@unique([userId, lmsCourseId])
   @@map("courses")
@@ -121,6 +123,7 @@ model Activity {
   user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   course       Course?       @relation(fields: [courseId], references: [id], onDelete: SetNull)
   notification Notification?
+  notes        Note[]
 
   @@unique([userId, fingerprint])
   @@index([userId, detectedAt(sort: Desc)])
@@ -147,21 +150,6 @@ model Notification {
   @@map("notifications")
 }
 
-model AuthToken {
-  id        String   @id @default(uuid())
-  userId    String   @map("user_id")
-  type      String
-  tokenHash String   @map("token_hash")
-  usedAt    DateTime? @map("used_at")
-  expiresAt DateTime @map("expires_at")
-  createdAt DateTime @default(now()) @map("created_at")
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([tokenHash])
-  @@map("auth_tokens")
-}
-
 model NotificationPreference {
   id                   String  @id @default(uuid())
   userId               String  @unique @map("user_id")
@@ -175,4 +163,77 @@ model NotificationPreference {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("notification_preferences")
+}
+
+// One-time links sent by email (confirm address, reset password). Only a hash of the token is stored.
+model AuthToken {
+  id        String    @id @default(uuid())
+  userId    String    @map("user_id")
+  type      String // VERIFY_EMAIL or RESET_PASSWORD
+  tokenHash String    @unique @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, type])
+  @@map("auth_tokens")
+}
+
+// A student's private note (Markdown text). Optionally linked to one of their courses and/or e-GURO items.
+model Note {
+  id         String   @id @default(uuid())
+  userId     String   @map("user_id")
+  courseId   String?  @map("course_id")
+  activityId String?  @map("activity_id")
+  title      String
+  body       String   @default("")
+  tags       String[] @default([])
+  pinned     Boolean  @default(false)
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course   Course?   @relation(fields: [courseId], references: [id], onDelete: SetNull)
+  activity Activity? @relation(fields: [activityId], references: [id], onDelete: SetNull)
+
+  @@index([userId, updatedAt(sort: Desc)])
+  @@index([userId, courseId])
+  @@index([userId, activityId])
+  @@map("notes")
+}
+
+// ---- Operations tables (no personal data) ----
+
+// Counters for rate limiting. Kept in the database so every server instance shares them.
+model RateLimit {
+  key     String   @id
+  count   Int
+  resetAt DateTime @map("reset_at")
+
+  @@index([resetAt])
+  @@map("rate_limits")
+}
+
+// Unexpected errors, scrubbed of emails, tokens and connection strings. Vercel's own logs only keep about an hour.
+model ErrorEvent {
+  id      String   @id @default(uuid())
+  at      DateTime @default(now())
+  scope   String // for example "request:route", "checker"
+  code    String?
+  message String
+  path    String?
+
+  @@index([at(sort: Desc)])
+  @@map("error_events")
+}
+
+// Small key/value facts about the system, for example when the checker last ran.
+model SystemState {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("system_state")
 }

@@ -20,7 +20,10 @@ const nextConfig: NextConfig = {
   serverExternalPackages: ["pg", "nodemailer"],
   poweredByHeader: false,
   async headers() {
+    // Private, per-student pages and the API must never be stored by a CDN or a shared cache.
+    const noStore = [{ key: "Cache-Control", value: "private, no-store, max-age=0" }];
     return [
+      ...["/api/:path*", "/dashboard/:path*", "/courses/:path*", "/activities/:path*", "/notes/:path*", "/notifications/:path*", "/settings/:path*"].map((source) => ({ source, headers: noStore })),
       {
         source: "/:path*",
         headers: [

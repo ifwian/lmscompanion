@@ -9,7 +9,7 @@
 // Politeness rules: honest User-Agent, a timeout on every request, a pause between requests,
 // and a login is attempted ONCE per check (never retried here).
 import { LmsAuthError, LmsFormatError, LmsTemporaryError } from "./errors";
-import { mergeItems, parseActivityPage, parseCoursesFromPage } from "./parsers";
+import { mergeItems, parseActivityPage, parseCoursesFromPage, hasClassListMarker } from "./parsers";
 import type { LmsActivity, LmsCourse, LmsCredentials } from "./types";
 
 const USER_AGENT = "eGuroCompanion/1.0 (personal notification tool for students)";
@@ -146,6 +146,9 @@ export async function getCourses(session: LmsSession): Promise<LmsCourse[]> {
   const response = await request(session, FILTER_PAGE, { headers: { Referer: `${session.baseUrl}/app/main_student.php` } });
   const html = await response.text();
   if (hasPasswordInput(html)) throw new LmsAuthError("e-GURO session was not accepted.");
+  // The block that lists classes is gone, so the page changed shape. Without this the check would quietly
+  // save zero courses and look successful, which is exactly the kind of breakage nobody would notice.
+  if (!hasClassListMarker(html)) throw new LmsFormatError("Course filter page has no global_class block.");
   return parseCoursesFromPage(html);
 }
 

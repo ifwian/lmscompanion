@@ -25,8 +25,11 @@ next-env.d.ts
 *.cookies
 cookies.txt
 session*.json
+smtp-auth.tmp.mjs
 
 # diagnostic output
 diagnose-output.txt
 
 email-preview-*.html
+
+backups/

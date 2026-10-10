@@ -30,8 +30,10 @@ export async function createAuthToken(userId: string, type: TokenType): Promise<
 export async function consumeAuthToken(token: string, type: TokenType): Promise<string | null> {
   if (typeof token !== "string" || !/^[0-9a-f]{64}$/.test(token)) return null;
   const db = getDb();
+  // ownership: ok - found by the hash of a one-time secret, which only the owner of the address received
   const row = await db.authToken.findUnique({ where: { tokenHash: hash(token) } });
   if (!row || row.type !== type || row.usedAt || row.expiresAt < new Date()) return null;
+  // ownership: ok - same one-time secret
   const claimed = await db.authToken.updateMany({ where: { id: row.id, usedAt: null }, data: { usedAt: new Date() } });
   return claimed.count === 1 ? row.userId : null;
 }

@@ -141,3 +141,24 @@ Legend: **Verified** = tested in the build environment. **Unverified** = written
 - **Scheduler:** the GitHub workflow now skips quietly until the app is deployed (no more failure emails).
 - **Tested:** end-to-end 80 checks, 80 passed (includes pending/unread sections, lessons sending no email, new work sending exactly one email, handed-in items clearing, the test-email button); parser checks 25 passed; email command tested for success, wrong password, unreachable server, not configured, and an app password written with spaces; screenshots of dashboard (dark and light), unread view and phone layout.
 - **Not confirmed on the real account:** which date the website shows as the due date; that the real item links open; real Gmail delivery.
+
+## Update 7 — 2026-10-06 (from "one person's tool" to a site for classmates)
+- **Request:** students should just open the site and sign up, with no GitHub, Neon or `.env`, and no per-student hosting.
+- **Finding:** the app already was one multi-user site that stores each student's e-GURO password encrypted from the website form. The manual guide was the OWNER's one-time setup. So the work was making that safe and easy, not a redesign.
+- **Built:** invite code; privacy page and consent; email confirmation (notifications only to confirmed addresses); forgot and reset password; delete my account; owner summary (counts only); checker runs a few students at a time and uses Vercel Hobby's 300 s limit; `npm run setup` wizard for the owner; migration `20261006000000_accounts_tokens`; docs `ARCHITECTURE.md`, `DEPLOY_ONCE.md`, `FOR_CLASSMATES.md`.
+- **Corrected earlier advice:** GitHub's free plan gives private repositories only 2,000 Actions minutes a month, so a scheduler there needs a public repository or a free external scheduler.
+- **Tested:** end-to-end test now 116 checks, 116 passed (adds invite code refusal, consent, confirmation links including old-link invalidation and single use, no email to unconfirmed addresses and delivery after confirming, forgot and reset flow, old sessions signed out, owner summary has no personal data, delete account removes everything, other students untouched); wizard run in a temporary folder.
+- **Not tested:** real Vercel, Neon, Gmail, cron-job.org or GitHub scheduler; many real students at once; the wizard's database step (my environment cannot download Prisma's migration engine).
+
+## Update 8 — 2026-10-07 (notes)
+- **Request:** a notes-taking system and other helpful student tools: architecture, UI/UX, implementation steps.
+- **Built:** Notes (migration `20261007000000_notes`): create, edit with autosave, Markdown preview, tags, search, pin, link to a course or e-GURO item, download (Markdown or JSON), delete. Entry points: Notes menu, "Your notes" on Overview, "+ Note" on items, "Notes for this course". Design and plan for the next tools: `docs/FEATURES_ROADMAP.md`.
+- **Tested:** end-to-end test now 137 checks (adds 21 for notes: privacy between students, ownership, limits, stale-save conflict, XSS, search, export, deletion with the account); screenshots of the notes list, editor (write and preview), dashboard strip and phone layout.
+- **Not tested:** real devices, very large notes in a slow connection, and whether students actually like the layout.
+
+## Update 9 — 2026-10-09 (production readiness)
+- **Request:** do the things in the "vibe coding vs production reality" picture: security and RLS, shipping, speed, traffic, survival.
+- **Built:** database-backed rate limiting; ownership guard and secret scan (both run in CI); no-store headers; connection pool limit and pooled-database guidance; CI workflow, Dependabot, auto-migration on production deploy (`vercel-build`, `DIRECT_URL`); error log table with scrubbing, instrumentation hook and friendly error pages; checker heartbeat and `/api/health?strict=1` for uptime monitors; encrypted backup and restore scripts plus an optional weekly backup workflow; docs `PRODUCTION_CHECKLIST.md` and `RUNBOOK.md`. Migration `20261008000000_operations`.
+- **Decision:** row level security was not added (reasons in the checklist); the ownership guard replaces it for this architecture.
+- **Measured:** end-to-end 149 checks, 149 passed; speed test (300 items, 120 notes) every page under 0.25 s p95 locally; scale test 100 students checked in 65 s with no failures or duplicates; backup drill restored 7 tables with identical fingerprints and refused a non-empty database and a wrong key.
+- **Not tested:** GitHub Actions on GitHub, UptimeRobot, Vercel regions and rollback, real traffic, a real Neon restore.

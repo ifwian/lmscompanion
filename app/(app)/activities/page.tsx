@@ -43,6 +43,8 @@ export default async function ActivitiesPage({ searchParams }: { searchParams: P
     }),
   ]);
   const activities = view.key === "pending" ? sortPending(rows) : rows;
+  const noteRows = await db.note.findMany({ where: { userId: user.id, activityId: { in: activities.map((a) => a.id) } }, select: { id: true, activityId: true } });
+  const noteByActivity = new Map(noteRows.map((n) => [n.activityId, n.id]));
 
   return (
     <>
@@ -74,7 +76,7 @@ export default async function ActivitiesPage({ searchParams }: { searchParams: P
       ) : (
         <ul className="list">
           {activities.map((a) => (
-            <ActivityRow key={a.id} type={a.type} lmsType={a.lmsType} isMaterial={a.isMaterial} title={a.title}
+            <ActivityRow key={a.id} activityId={a.id} noteId={noteByActivity.get(a.id) ?? null} type={a.type} lmsType={a.lmsType} isMaterial={a.isMaterial} title={a.title}
               courseLabel={a.course ? [a.course.courseCode, a.course.courseName].filter(Boolean).join(" ") : null}
               detectedAt={a.detectedAt} postedAt={a.postedAt} dueDate={a.dueDate} url={a.url} status={a.lmsStatus} isUnread={a.isUnread}
               isNew={a.notification ? a.notification.readAt === null : false} />

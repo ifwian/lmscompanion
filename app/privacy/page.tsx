@@ -20,6 +20,7 @@ export default function PrivacyPage() {
           <li>Your name, email address and a scrambled (hashed) app password. We cannot read your app password.</li>
           <li>Your e-GURO username, and your e-GURO password <strong>encrypted</strong> with a key kept on the server. It is needed so the app can log in for you while you are offline. It is never shown again, never put in logs, and never emailed.</li>
           <li>The titles, types, dates and course names of the items found in your e-GURO lists, and the notifications we sent you.</li>
+          <li>The notes you write in the Notes section. They are private to your account, but they are <strong>not</strong> encrypted: the person who runs this site can read them in the database. Do not put passwords or anything secret in a note.</li>
         </ul>
         <p>Nothing else is collected. No tracking, no advertising, nothing is sold or shared.</p>
 

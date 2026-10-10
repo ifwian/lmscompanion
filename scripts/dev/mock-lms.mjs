@@ -99,6 +99,5 @@ export function startMockLms(port = 4000) {
 
 // Run directly: node scripts/dev/mock-lms.mjs
 if (import.meta.url === `file://${process.argv[1]}`) {
-  const { port } = await startMockLms(Number(process.env.PORT ?? 4000));
-  console.log(`MOCK e-GURO (development only) listening on http://localhost:${port}`);
+  startMockLms(Number(process.env.PORT ?? 4000)).then(({ port }) => console.log(`MOCK e-GURO (development only) listening on http://localhost:${port}`));
 }

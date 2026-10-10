@@ -39,7 +39,7 @@ export default function DeleteAccountForm() {
       <div className="field">
         <label htmlFor="delete-password">Your app password</label>
         <input id="delete-password" name="password" type="password" autoComplete="current-password" required />
-        <p className="hint">This removes your account, your stored (encrypted) e-GURO password, your courses, activities and notifications.</p>
+        <p className="hint">This removes your account, your stored (encrypted) e-GURO password, your courses, activities, notes and notifications.</p>
       </div>
       <p className="form-error" role="alert" aria-live="polite">{error}</p>
       <button className="button button-quiet" type="submit" disabled={busy}>{busy ? "Deleting…" : "Delete my account"}</button>

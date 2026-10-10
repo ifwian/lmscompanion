@@ -1,0 +1,43 @@
+# OPTIONAL weekly encrypted backup. It does nothing until you add the two secrets below.
+# The backup file is encrypted with ENCRYPTION_KEY before it is stored, so the artifact is unreadable without that key.
+# Trade-off: this puts your database address and encryption key in GitHub Secrets. If you do not want that,
+# delete this file and run "npm run backup" yourself from time to time instead.
+name: Backup
+
+on:
+  schedule:
+    - cron: "17 19 * * 0" # Sundays, 03:17 Philippine time
+  workflow_dispatch: {}
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Skip quietly when the secrets are not set
+        id: check
+        env:
+          DB: ${{ secrets.BACKUP_DATABASE_URL }}
+          KEY: ${{ secrets.ENCRYPTION_KEY }}
+        run: |
+          if [ -z "$DB" ] || [ -z "$KEY" ]; then echo "Backup secrets are not set. Skipping."; echo "run=false" >> "$GITHUB_OUTPUT"; else echo "run=true" >> "$GITHUB_OUTPUT"; fi
+      - uses: actions/setup-node@v4
+        if: steps.check.outputs.run == 'true'
+        with:
+          node-version: 22
+          cache: npm
+      - if: steps.check.outputs.run == 'true'
+        run: npm ci
+      - name: Make the encrypted backup
+        if: steps.check.outputs.run == 'true'
+        env:
+          DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
+          ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
+        run: npm run backup
+      - uses: actions/upload-artifact@v4
+        if: steps.check.outputs.run == 'true'
+        with:
+          name: egaro-backup
+          path: backups/*.enc
+          retention-days: 30

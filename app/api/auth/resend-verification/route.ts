@@ -11,7 +11,7 @@ export async function POST(request: Request) {
   const auth = await requireUserApi(request);
   if ("response" in auth) return auth.response;
   if (auth.user.emailVerifiedAt) return Response.json({ ok: true, message: "Your email is already confirmed." });
-  if (isRateLimited(`resend:${auth.user.id}`, 3, 60 * 60 * 1000)) return jsonError("Please wait a while before asking again.", 429);
+  if (await isRateLimited(`resend:${auth.user.id}`, 3, 60 * 60 * 1000)) return jsonError("Please wait a while before asking again.", 429);
 
   const base = linkBase(request);
   if (!isEmailConfigured() || !base) return jsonError("Email is not set up on the server yet. Ask the person who runs this site.", 503);

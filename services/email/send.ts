@@ -22,7 +22,7 @@ export async function sendPendingEmails(userId?: string): Promise<EmailRunResult
     },
     include: {
       activity: { include: { course: true } },
-      user: { select: { email: true, notificationPreferences: true } },
+      user: { select: { email: true, emailVerifiedAt: true, notificationPreferences: true } },
     },
     orderBy: { createdAt: "asc" },
     take: 100,
@@ -30,21 +30,22 @@ export async function sendPendingEmails(userId?: string): Promise<EmailRunResult
 
   for (const note of pending) {
     if (Date.now() - note.createdAt.getTime() > STALE_AFTER_MS) {
-      await db.notification.update({ where: { id: note.id }, data: { emailStatus: "SKIPPED" } });
+      await db.notification.update({ where: { id: note.id, userId: note.userId }, data: { emailStatus: "SKIPPED" } });
       result.skipped += 1;
       continue;
     }
     // The student turned this type off: keep the in-app notification, skip the email.
     if (!isTypeEnabled(note.user.notificationPreferences, note.notificationType)) {
-      await db.notification.update({ where: { id: note.id }, data: { emailStatus: "SKIPPED" } });
+      await db.notification.update({ where: { id: note.id, userId: note.userId }, data: { emailStatus: "SKIPPED" } });
       result.skipped += 1;
       continue;
     }
     if (!isEmailConfigured()) continue; // leave it PENDING until email is configured
+    if (!note.user.emailVerifiedAt) continue; // never email an address that has not been confirmed (it stays pending)
 
     // Claim it: only one runner can move this exact (status, attempts) pair forward.
     const claimed = await db.notification.updateMany({
-      where: { id: note.id, emailStatus: note.emailStatus, emailAttempts: note.emailAttempts },
+      where: { id: note.id, userId: note.userId, emailStatus: note.emailStatus, emailAttempts: note.emailAttempts },
       data: { emailAttempts: { increment: 1 } },
     });
     if (claimed.count !== 1) continue;
@@ -67,11 +68,11 @@ export async function sendPendingEmails(userId?: string): Promise<EmailRunResult
 
     try {
       await sendMail(note.user.email, email.subject, email.text, email.html);
-      await db.notification.update({ where: { id: note.id }, data: { emailStatus: "SENT", emailSentAt: new Date() } });
+      await db.notification.update({ where: { id: note.id, userId: note.userId }, data: { emailStatus: "SENT", emailSentAt: new Date() } });
       result.sent += 1;
     } catch {
       // Do not log the error object: SMTP errors can contain addresses or credentials.
-      await db.notification.update({ where: { id: note.id }, data: { emailStatus: "FAILED" } });
+      await db.notification.update({ where: { id: note.id, userId: note.userId }, data: { emailStatus: "FAILED" } });
       result.failed += 1;
     }
   }

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getDb } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth/session";
@@ -31,6 +32,7 @@ export default async function CoursesPage() {
               <div className="item-main">
                 <p className="item-meta mono">{c.courseCode ?? ""}</p>
                 <p className="item-title">{c.courseName}</p>
+                <p className="item-meta"><Link href={`/notes?course=${c.id}`}>Notes for this course →</Link></p>
               </div>
             </li>
           ))}

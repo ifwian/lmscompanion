@@ -13,14 +13,14 @@ const SAME_ANSWER = { ok: true, message: "If that email has an account, a reset 
 
 export async function POST(request: Request) {
   if (!isSameOrigin(request)) return Response.json({ error: "Request blocked." }, { status: 403 });
-  if (isRateLimited(`forgot:${clientKey(request)}`, 30, 60 * 60 * 1000)) {
+  if (await isRateLimited(`forgot:${clientKey(request)}`, 30, 60 * 60 * 1000)) {
     return Response.json({ error: "Too many attempts. Try again later." }, { status: 429 });
   }
   const body = (await request.json().catch(() => null)) as { email?: unknown } | null;
   if (typeof body?.email !== "string") return Response.json(SAME_ANSWER);
 
   const email = normalizeEmail(body.email);
-  if (isRateLimited(`forgot-email:${email}`, 3, 60 * 60 * 1000)) return Response.json(SAME_ANSWER);
+  if (await isRateLimited(`forgot-email:${email}`, 3, 60 * 60 * 1000)) return Response.json(SAME_ANSWER);
 
   const base = linkBase(request);
   if (!isEmailConfigured() || !base) return Response.json(SAME_ANSWER);

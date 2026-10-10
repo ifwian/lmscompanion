@@ -3,6 +3,7 @@ import { getDb } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth/session";
 import ActionButton from "@/components/ActionButton";
 import ConnectionPanel from "@/components/ConnectionPanel";
+import DeleteAccountForm from "@/components/DeleteAccountForm";
 import LmsConnectForm from "@/components/LmsConnectForm";
 import LogoutButton from "@/components/LogoutButton";
 import PasswordForm from "@/components/PasswordForm";
@@ -74,6 +75,11 @@ export default async function SettingsPage() {
         <div className="section-head"><span className="idx">04</span><h2 id="security-title" className="label">Security</h2></div>
         <PasswordForm />
         <p><LogoutButton /></p>
+      </section>
+
+      <section className="section" aria-labelledby="delete-title">
+        <div className="section-head"><span className="idx">05</span><h2 id="delete-title" className="label">Delete account</h2></div>
+        <DeleteAccountForm />
       </section>
     </>
   );

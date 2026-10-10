@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 export async function POST(request: Request) {
   const auth = await requireUserApi(request);
   if ("response" in auth) return auth.response;
-  if (isRateLimited(`password:${auth.user.id}`, 5, 15 * 60 * 1000)) {
+  if (await isRateLimited(`password:${auth.user.id}`, 5, 15 * 60 * 1000)) {
     return jsonError("Too many attempts. Try again in a few minutes.", 429);
   }
 

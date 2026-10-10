@@ -1,4 +1,6 @@
-// Two small protections for the auth API routes: same-origin check (CSRF) and rate limiting.
+// Two small protections for the API routes: same-origin check (CSRF) and rate limiting.
+import { getDb } from "@/lib/db";
+
 
 // CSRF defence: browsers send an Origin header on POST requests. If it is present and does not
 // match this site, the request came from another website, so we reject it.
@@ -14,20 +16,24 @@ export function isSameOrigin(request: Request): boolean {
   }
 }
 
-// Simple in-memory rate limiter: max N attempts per window per key.
-// LIMITATION: memory is per server instance, so on Vercel (many instances) this is only a
-// best-effort brake. Milestone 12 (security review) revisits this.
-const attempts = new Map<string, { count: number; resetAt: number }>();
-
-export function isRateLimited(key: string, max: number, windowMs: number): boolean {
-  const now = Date.now();
-  const entry = attempts.get(key);
-  if (!entry || entry.resetAt < now) {
-    attempts.set(key, { count: 1, resetAt: now + windowMs });
+// Rate limiter stored in the database, so every server instance shares the same counters
+// (an in-memory counter would reset on each serverless instance and be easy to get around).
+// One atomic statement: start a new window if the old one ended, otherwise add one.
+// If the database cannot be reached we let the request through (and log it): a broken limiter must not lock everyone out.
+export async function isRateLimited(key: string, max: number, windowMs: number): Promise<boolean> {
+  try {
+    const rows = await getDb().$queryRaw<{ count: number }[]>`
+      INSERT INTO rate_limits ("key", "count", "reset_at")
+      VALUES (${key}, 1, (now() AT TIME ZONE 'utc') + (${windowMs}::int * interval '1 millisecond'))
+      ON CONFLICT ("key") DO UPDATE SET
+        "count" = CASE WHEN rate_limits.reset_at < (now() AT TIME ZONE 'utc') THEN 1 ELSE rate_limits.count + 1 END,
+        "reset_at" = CASE WHEN rate_limits.reset_at < (now() AT TIME ZONE 'utc') THEN (now() AT TIME ZONE 'utc') + (${windowMs}::int * interval '1 millisecond') ELSE rate_limits.reset_at END
+      RETURNING "count"`;
+    return Number(rows[0]?.count ?? 0) > max;
+  } catch {
+    console.error(JSON.stringify({ level: "error", scope: "rate-limit", message: "Rate limiter unavailable; letting the request through." }));
     return false;
   }
-  entry.count += 1;
-  return entry.count > max;
 }
 
 export function clientKey(request: Request): string {

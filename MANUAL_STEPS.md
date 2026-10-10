@@ -2,28 +2,23 @@
 
 Everything the code can do is done. These steps need your accounts, your passwords or your own browser, so I could not do them. Do them in this order and tick each box.
 
-## A. Run it on your computer (about 20 minutes)
+## A. Run it on your computer (owner, once)
 
-- [ ] **Install Node.js 20 or newer** (nodejs.org). Check with `node -v`.
-- [ ] **Create a free database.** Go to neon.tech, sign up, create a project, and copy the connection string (it starts with `postgresql://`).
-- [ ] **Create the Gmail sender account.** Make a NEW Gmail just for this project (not your personal one). Turn on 2-Step Verification, then create an App password at myaccount.google.com/apppasswords. Copy the 16-character password.
-- [ ] **Create your `.env` file:**
-  ```bash
-  cp .env.example .env
-  ```
-  Open `.env` and fill in:
-  - `DATABASE_URL` = the Neon connection string
-  - `AUTH_SECRET`, `ENCRYPTION_KEY`, `CRON_SECRET` = three DIFFERENT random values. Generate each with:
-    `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`
-  - `SMTP_USER` = the project Gmail address, `SMTP_PASSWORD` = the app password, `MAIL_FROM` = `e-GURO Companion <that gmail address>`
-  - **Back up `ENCRYPTION_KEY` somewhere safe.** If you lose it, every stored e-GURO password becomes unreadable and everyone must reconnect.
-- [ ] **Install and create the tables:**
+- [ ] Install **Node.js 20 or newer** (nodejs.org). Check with `node -v`.
+- [ ] Make a free **Neon** database (neon.tech) and copy its connection string.
+- [ ] Make a NEW **Gmail** just for this app, turn on 2-Step Verification, and create an app password (myaccount.google.com/apppasswords).
+- [ ] Then let the wizard do the rest. It makes the secret keys, writes `.env`, creates the tables and can test the email:
   ```bash
   npm install
-  npm run db:deploy
+  npm run setup
   npm run dev
   ```
-  Open http://localhost:3000, register, then open `/status` to confirm the database is connected.
+  Open http://localhost:3000, sign up with the invite code it printed, then open `/status`.
+- [ ] **Back up `ENCRYPTION_KEY`** (it is in `.env`) somewhere private. If you lose it, everyone must reconnect e-GURO.
+
+## A2. Open it to your classmates (the new plan)
+
+Students need NO setup: they open your link and sign up. You deploy once. Read `docs/ARCHITECTURE.md` (one page) and follow `docs/DEPLOY_ONCE.md`. Give classmates `docs/FOR_CLASSMATES.md` and the invite code.
 
 ## B. Update, then see your real pending activities
 
@@ -71,21 +66,20 @@ You got "Run failed: Check LMS" emails because the scheduled workflow runs every
 - [ ] `gh workflow disable "Check LMS" --repo ifwian/eGURO-Companion`  (turn it on again after deploying with `gh workflow enable ...`), or
 - [ ] push the new workflow file to the repository's DEFAULT branch. Your default branch is `master` and the code is on `main`. GitHub only runs schedules from the default branch, so on GitHub go to Settings > Branches and make `main` the default (or merge `main` into `master`).
 
-## D. Put it online for free
+## D0. Production hardening (new)
 
-- [ ] **GitHub:** create a repository (private is fine) and push the code. Check that `.env` is NOT in the commit (`git status` must not list it).
-- [ ] **Vercel:** sign up (free Hobby plan), import the repository, and add these Environment Variables (same values as your `.env`, with `LMS_BASE_URL=https://lms.ccc.edu.ph`): `DATABASE_URL`, `AUTH_SECRET`, `ENCRYPTION_KEY`, `LMS_BASE_URL`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `MAIL_FROM`, `CRON_SECRET`.
-- [ ] **Create the tables in the production database.** On your computer, with `DATABASE_URL` set to the production string: `npm run db:deploy`.
-- [ ] **Deploy** in Vercel, then open `https://YOUR-APP.vercel.app/status`.
-- [ ] **Scheduler:** in your GitHub repo go to Settings > Secrets and variables > Actions and add `APP_URL` (your Vercel address, no trailing slash) and `CRON_SECRET` (same value as on Vercel). Then open the Actions tab, pick "Check LMS", and click **Run workflow** to test it. GitHub runs it about every 15 minutes and can be late.
-- [ ] **Repository activity:** GitHub may pause scheduled workflows on repositories with no activity for a long time. If checks stop, re-enable the workflow in the Actions tab.
-- [ ] **Test on production:** register, connect e-GURO, click Check now, confirm an email arrives, run the workflow twice and confirm there is no duplicate email.
+Read `docs/PRODUCTION_CHECKLIST.md` (it follows the "vibe coding vs production reality" picture) and `docs/RUNBOOK.md`. Your steps: Neon pooled `DATABASE_URL` plus `DIRECT_URL`, Vercel region near the database, a branch rule requiring CI, an UptimeRobot monitor on `/api/health?strict=1`, and a first `npm run backup`. Deploys now apply database migrations automatically.
 
-## E. Before inviting classmates
+## D. Put it online
+
+Follow `docs/DEPLOY_ONCE.md`. Two corrections to what I told you earlier: (1) GitHub's free plan gives PRIVATE repositories only 2,000 Actions minutes a month, so a scheduler on a private repository will run out; use a public repository or the free external scheduler described there. (2) Set `APP_URL` after the first deploy, or confirm-email and reset-password emails are not sent.
+
+## E. Before inviting classmates (checklist)
 
 - [ ] Tell them plainly: the app stores their e-GURO password (encrypted) so it can check for them. They can remove it any time with **Disconnect** in Settings.
 - [ ] Consider asking the CCC ICT office whether this kind of tool is allowed. The checker is deliberately gentle (every 15 minutes, a few requests per student), but the college may have a policy.
-- [ ] Gmail limits how many emails one account can send per day. That is fine for a small group.
+- [ ] Gmail limits how many emails one account can send per day (about 500, as far as I know). That is fine for a class.
+- [ ] Share the invite code only in your class chat. Use `/api/admin/summary` (counts only) to see how it is going.
 - [ ] Change any password that was ever stored in the old GitHub Secrets.
 
 ## F. Things to know

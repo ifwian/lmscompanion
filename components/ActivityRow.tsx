@@ -1,3 +1,5 @@
+import Link from "next/link";
+import NewNoteButton from "@/components/NewNoteButton";
 import { type TYPE_LABEL, PENDING_LABEL, dueIn, formatDateTime, timeAgo, typeLabel } from "@/lib/ui/format";
 
 type Props = {
@@ -16,9 +18,11 @@ type Props = {
   // true while the notification for it has not been marked as read
   isNew: boolean;
   large?: boolean;
+  activityId?: string; // when given, the row offers a note about this item
+  noteId?: string | null; // the note that already exists for it, if any
 };
 
-export default function ActivityRow({ type, lmsType, isMaterial, title, courseLabel, detectedAt, postedAt, dueDate, url, status, isUnread, isNew, large }: Props) {
+export default function ActivityRow({ type, lmsType, isMaterial, title, courseLabel, detectedAt, postedAt, dueDate, url, status, isUnread, isNew, large, activityId, noteId }: Props) {
   const badgeText = status ? PENDING_LABEL[status] ?? status : isUnread ? "Unread" : "Read";
   const badgeClass =
     status === "MISSED" ? "badge badge-missed" : status === "DUE_TODAY" ? "badge badge-new" : status ? "badge badge-assigned" : "badge";
@@ -44,6 +48,11 @@ export default function ActivityRow({ type, lmsType, isMaterial, title, courseLa
             `Detected ${timeAgo(detectedAt)}`
           )}
         </p>
+        {noteId ? (
+          <p className="item-meta"><Link href={`/notes/${noteId}`}>Open your note →</Link></p>
+        ) : activityId ? (
+          <NewNoteButton small label="+ Note" activityId={activityId} />
+        ) : null}
       </div>
     </li>
   );

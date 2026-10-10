@@ -9,7 +9,7 @@ export const maxDuration = 60;
 export async function POST(request: Request) {
   const auth = await requireUserApi(request);
   if ("response" in auth) return auth.response;
-  if (isRateLimited(`check-now:${auth.user.id}`, 3, 10 * 60 * 1000)) {
+  if (await isRateLimited(`check-now:${auth.user.id}`, 3, 10 * 60 * 1000)) {
     return jsonError("Please wait a few minutes before checking again.", 429);
   }
   const outcome = await syncUserLms(auth.user.id);
