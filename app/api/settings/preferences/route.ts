@@ -3,8 +3,9 @@ import { jsonError, readJson, requireUserApi } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
 
-// Only these four switches can be changed. Daily summary is not available yet.
-const FIELDS = ["activitiesEnabled", "quizzesEnabled", "assignmentsEnabled", "announcementsEnabled"] as const;
+// Only these switches can be changed. Daily summary is not available yet.
+// telegramEnabled only has an effect once a Telegram chat is linked (see /api/telegram).
+const FIELDS = ["activitiesEnabled", "quizzesEnabled", "assignmentsEnabled", "announcementsEnabled", "telegramEnabled"] as const;
 
 export async function POST(request: Request) {
   const auth = await requireUserApi(request);

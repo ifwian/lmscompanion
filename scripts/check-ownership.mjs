@@ -6,7 +6,7 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 
-const MODELS = ["activity", "note", "course", "notification", "lmsConnection", "notificationPreference", "authToken"];
+const MODELS = ["activity", "note", "course", "notification", "lmsConnection", "notificationPreference", "authToken", "task", "telegramLink", "telegramLinkCode"];
 const OPS = ["findMany", "findFirst", "findUnique", "findFirstOrThrow", "findUniqueOrThrow", "update", "updateMany", "delete", "deleteMany", "count", "aggregate", "groupBy", "upsert"];
 const CALL = new RegExp(`(?:\\bdb|\\btx|getDb\\(\\))\\.(${MODELS.join("|")})\\.(${OPS.join("|")})\\(`, "g");
 

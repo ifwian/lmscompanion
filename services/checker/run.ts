@@ -4,6 +4,8 @@ import { getDb } from "@/lib/db";
 import { config } from "@/lib/config";
 import { sendPendingEmails } from "@/services/email/send";
 import { ALERT_FOOTER, sendOwnerAlert } from "@/services/email/owner-alert";
+import { pruneLinkCodes } from "@/services/telegram/send";
+import { sendDueReminders } from "@/services/telegram/reminders";
 import { pruneOperationalData } from "@/lib/log";
 import { setState } from "@/lib/system";
 import { syncUserLms } from "./sync-user";
@@ -123,8 +125,11 @@ export async function runChecker(): Promise<CheckerSummary> {
   // Retry emails that failed earlier (only affects notifications with attempts left).
   const retried = await sendPendingEmails().catch(() => ({ sent: 0, skipped: 0, failed: 0 }));
   summary.emailsSent += retried.sent;
+  // Telegram reminders go out after the checks, so a due date found in this run is included.
+  const telegram = await sendDueReminders();
+  await pruneLinkCodes();
   await alertOwner(summary, failureCodes);
-  await setState("checker_last_summary", JSON.stringify({ ...summary, seconds: Math.round((Date.now() - started) / 1000) }));
+  await setState("checker_last_summary", JSON.stringify({ ...summary, seconds: Math.round((Date.now() - started) / 1000), telegramRemindersSent: telegram.sent }));
   await pruneOperationalData();
   return summary;
 }

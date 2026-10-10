@@ -45,11 +45,13 @@ model User {
 
   lmsConnection           LmsConnection?
   notificationPreferences NotificationPreference?
+  telegramLink            TelegramLink?
   courses                 Course[]
   activities              Activity[]
   notifications           Notification[]
   authTokens              AuthToken[]
   notes                   Note[]
+  tasks                   Task[]
 
   @@map("users")
 }
@@ -91,6 +93,7 @@ model Course {
   user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   activities Activity[]
   notes      Note[]
+  tasks      Task[]
 
   @@unique([userId, lmsCourseId])
   @@map("courses")
@@ -124,6 +127,7 @@ model Activity {
   course       Course?       @relation(fields: [courseId], references: [id], onDelete: SetNull)
   notification Notification?
   notes        Note[]
+  tasks        Task[]
 
   @@unique([userId, fingerprint])
   @@index([userId, detectedAt(sort: Desc)])
@@ -157,8 +161,10 @@ model NotificationPreference {
   quizzesEnabled       Boolean @default(true) @map("quizzes_enabled")
   assignmentsEnabled   Boolean @default(true) @map("assignments_enabled")
   announcementsEnabled Boolean @default(true) @map("announcements_enabled")
-  // Stored for a future feature. Nothing sends daily emails.
-  dailySummaryEnabled  Boolean @default(false) @map("daily_summary_enabled")
+// Stored for a future feature. Nothing sends daily emails.
+  dailySummaryEnabled  Boolean  @default(false) @map("daily_summary_enabled")
+  // Opt-in only, and only ever used when a TelegramLink exists.
+  telegramEnabled      Boolean  @default(false) @map("telegram_enabled")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -202,6 +208,71 @@ model Note {
   @@index([userId, courseId])
   @@index([userId, activityId])
   @@map("notes")
+}
+
+// ---- Personal tasks (the student's own to-do list, next to what e-GURO assigns) ----
+
+enum TaskPriority {
+  LOW
+  NORMAL
+  HIGH
+}
+
+enum TaskStatus {
+  OPEN
+  DONE
+}
+
+model Task {
+  id          String       @id @default(uuid())
+  userId      String       @map("user_id")
+  title       String
+  description String?
+  dueDate     DateTime?    @map("due_date")
+  priority    TaskPriority @default(NORMAL)
+  status      TaskStatus   @default(OPEN)
+  courseId    String?      @map("course_id")
+  activityId  String?      @map("activity_id")
+  completedAt DateTime?    @map("completed_at")
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course   Course?   @relation(fields: [courseId], references: [id], onDelete: SetNull)
+  activity Activity? @relation(fields: [activityId], references: [id], onDelete: SetNull)
+
+  @@index([userId, status])
+  @@index([userId, dueDate])
+  @@map("tasks")
+}
+
+// A student's Telegram account, linked only after they prove they control it by sending the bot a
+// one-time code from the app. One link per student. Deleting the account removes it (Cascade).
+model TelegramLink {
+  id            String   @id @default(uuid())
+  userId        String   @unique @map("user_id")
+  chatId        String   @map("chat_id")
+  chatUsername  String?  @map("chat_username")
+  linkedAt      DateTime @default(now()) @map("linked_at")
+  notificationsSentAt DateTime? @map("notifications_sent_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("telegram_links")
+}
+
+// A short code shown in the app. Only its hash is stored, and it works once for 15 minutes.
+model TelegramLinkCode {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  codeHash  String   @unique @map("code_hash")
+  expiresAt DateTime @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("telegram_link_codes")
 }
 
 // ---- Operations tables (no personal data) ----

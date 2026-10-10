@@ -8,7 +8,9 @@ import LmsConnectForm from "@/components/LmsConnectForm";
 import LogoutButton from "@/components/LogoutButton";
 import PasswordForm from "@/components/PasswordForm";
 import PreferencesForm from "@/components/PreferencesForm";
+import TelegramPanel from "@/components/TelegramPanel";
 import { isEmailConfigured } from "@/services/email/transport";
+import { isTelegramConfigured } from "@/lib/telegram";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Settings · e-GURO Companion" };
@@ -17,9 +19,10 @@ export default async function SettingsPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
   const db = getDb();
-  const [connection, prefs] = await Promise.all([
+  const [connection, prefs, telegramLink] = await Promise.all([
     db.lmsConnection.findUnique({ where: { userId: user.id } }),
     db.notificationPreference.findUnique({ where: { userId: user.id } }),
+    db.telegramLink.findUnique({ where: { userId: user.id }, select: { chatUsername: true, linkedAt: true } }),
   ]);
   const connected = Boolean(connection?.encryptedPassword);
   const needsAttention = connection?.status === "AUTH_ERROR" || connection?.status === "DISCONNECTED";
@@ -71,14 +74,27 @@ export default async function SettingsPage() {
         </div>
       </section>
 
+      <section className="section" id="telegram" aria-labelledby="telegram-title">
+        <div className="section-head"><span className="idx">04</span><h2 id="telegram-title" className="label">Telegram</h2></div>
+        <TelegramPanel
+          configured={isTelegramConfigured()}
+          initial={{
+            linked: Boolean(telegramLink),
+            chatUsername: telegramLink?.chatUsername ?? null,
+            linkedAt: telegramLink?.linkedAt.toISOString() ?? null,
+            enabled: prefs?.telegramEnabled ?? false,
+          }}
+        />
+      </section>
+
       <section className="section" aria-labelledby="security-title">
-        <div className="section-head"><span className="idx">04</span><h2 id="security-title" className="label">Security</h2></div>
+        <div className="section-head"><span className="idx">05</span><h2 id="security-title" className="label">Security</h2></div>
         <PasswordForm />
         <p><LogoutButton /></p>
       </section>
 
       <section className="section" aria-labelledby="delete-title">
-        <div className="section-head"><span className="idx">05</span><h2 id="delete-title" className="label">Delete account</h2></div>
+        <div className="section-head"><span className="idx">06</span><h2 id="delete-title" className="label">Delete account</h2></div>
         <DeleteAccountForm />
       </section>
     </>

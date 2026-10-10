@@ -7,8 +7,10 @@ import ActivityRow from "@/components/ActivityRow";
 import ConnectionPanel from "@/components/ConnectionPanel";
 import NewNoteButton from "@/components/NewNoteButton";
 import OnboardingChecklist from "@/components/OnboardingChecklist";
+import TaskToggle from "@/components/TaskToggle";
 import { isOnboardingComplete, onboardingSteps } from "@/lib/onboarding";
-import { greeting, sortPending, timeAgo } from "@/lib/ui/format";
+import { sortTasks } from "@/lib/tasks";
+import { dueIn, greeting, sortPending, timeAgo } from "@/lib/ui/format";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Overview · e-GURO Companion" };
@@ -20,7 +22,7 @@ export default async function DashboardPage() {
 
   // Every query below filters by userId.
   const include = { course: true, notification: { select: { readAt: true } } } as const;
-  const [connection, newAlerts, courseCount, pendingRaw, unreadCount, unreadLessons, recentNotes, activityNotes] = await Promise.all([
+  const [connection, newAlerts, courseCount, pendingRaw, unreadCount, unreadLessons, recentNotes, activityNotes, myTasks] = await Promise.all([
     db.lmsConnection.findUnique({ where: { userId: user.id } }),
     db.notification.count({ where: { userId: user.id, readAt: null } }),
     db.course.count({ where: { userId: user.id } }),
@@ -34,9 +36,11 @@ export default async function DashboardPage() {
     }),
     db.note.findMany({ where: { userId: user.id }, orderBy: [{ pinned: "desc" }, { updatedAt: "desc" }], take: 4, include: { course: true } }),
     db.note.findMany({ where: { userId: user.id, activityId: { not: null } }, select: { id: true, activityId: true } }),
+    db.task.findMany({ where: { userId: user.id, status: "OPEN" }, orderBy: [{ dueDate: { sort: "asc", nulls: "last" } }, { createdAt: "desc" }], take: 5 }),
   ]);
   const noteByActivity = new Map(activityNotes.map((n) => [n.activityId, n.id]));
   const pending = sortPending(pendingRaw);
+  const openTasks = sortTasks(myTasks);
   const checkedOnce = Boolean(connection?.baselineDone);
   // Built from the rows already loaded above (user.emailVerifiedAt and the user's own connection), so it adds no queries.
   const onboarding = onboardingSteps({ emailVerifiedAt: user.emailVerifiedAt, connection });
@@ -126,9 +130,35 @@ export default async function DashboardPage() {
         </aside>
       </div>
 
+      <section className="section-notes" aria-labelledby="tasks-title">
+        <div className="pending-head">
+          <div className="section-head"><span className="idx">03</span><h2 id="tasks-title" className="label">My tasks</h2></div>
+          <Link href="/tasks/new" className="button button-quiet button-small">New task</Link>
+        </div>
+        {openTasks.length === 0 ? (
+          <div className="empty">
+            <p className="empty-title">Nothing on your list</p>
+            <p className="hint">Add the things your teachers do not assign: group work, lab gear, reading, anything you need to remember.</p>
+          </div>
+        ) : (
+          <ul className="list">
+            {openTasks.map((task) => (
+              <li className="item" key={task.id}>
+                <TaskToggle taskId={task.id} done={false} />
+                <div className="item-main">
+                  <p className="item-title"><Link href={`/tasks/${task.id}`}>{task.title}</Link></p>
+                  <p className="item-meta">{task.dueDate ? `Due ${dueIn(task.dueDate)}` : "No due date"}</p>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+        {openTasks.length > 0 && <p className="hint" style={{ marginTop: "1rem" }}><Link href="/tasks">All my tasks →</Link></p>}
+      </section>
+
       <section className="section-notes" aria-labelledby="notes-title">
         <div className="pending-head">
-          <div className="section-head"><span className="idx">03</span><h2 id="notes-title" className="label">Your notes</h2></div>
+          <div className="section-head"><span className="idx">04</span><h2 id="notes-title" className="label">Your notes</h2></div>
           <NewNoteButton small label="New note" />
         </div>
         {recentNotes.length === 0 ? (
