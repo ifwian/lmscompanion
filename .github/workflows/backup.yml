@@ -35,7 +35,7 @@ jobs:
           DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
           ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
         run: npm run backup
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: steps.check.outputs.run == 'true'
         with:
           name: egaro-backup
