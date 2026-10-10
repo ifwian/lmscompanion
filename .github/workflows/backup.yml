@@ -22,7 +22,7 @@ jobs:
           KEY: ${{ secrets.ENCRYPTION_KEY }}
         run: |
           if [ -z "$DB" ] || [ -z "$KEY" ]; then echo "Backup secrets are not set. Skipping."; echo "run=false" >> "$GITHUB_OUTPUT"; else echo "run=true" >> "$GITHUB_OUTPUT"; fi
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         if: steps.check.outputs.run == 'true'
         with:
           node-version: 22
